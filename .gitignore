@@ -26,3 +26,5 @@ derby.log
 airflow/airflow.db
 airflow/logs/
 airflow/*.pid
+
+*output.md
