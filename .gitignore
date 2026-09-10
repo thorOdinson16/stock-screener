@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Spark / Hadoop
+*.log
+spark-warehouse/
+metastore_db/
+derby.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Secrets / local config overrides
+.env
+*.local.yaml
+*.local.properties
+
+# Airflow
+airflow/airflow.db
+airflow/logs/
+airflow/*.pid
