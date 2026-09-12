@@ -71,7 +71,7 @@ def fetch_quotes_batch(stocks: list[Stock], batch_size: int = 50, delay_seconds:
     so a transient issue with 50 symbols doesn't lose the other 450.
     """
     snapshots: list[QuoteSnapshot] = []
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
     for i in range(0, len(stocks), batch_size):
         batch = stocks[i : i + batch_size]
@@ -136,7 +136,7 @@ def fetch_fundamentals_batch(
     longer inter-batch delay and the daily-only cadence this is meant to run at.
     """
     snapshots: list[FundamentalsSnapshot] = []
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
     for i in range(0, len(stocks), batch_size):
         batch = stocks[i : i + batch_size]

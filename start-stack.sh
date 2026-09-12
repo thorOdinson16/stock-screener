@@ -19,7 +19,7 @@ ok()   { echo -e "\033[1;32m[  ok  ]\033[0m $*"; }
 fail() { echo -e "\033[1;31m[ fail ]\033[0m $*"; }
 
 port_free() {
-  ! sudo ss -tln 2>/dev/null | awk '{print $4}' | grep -q ":${1}\$"
+  ! ss -tln 2>/dev/null | awk '{print $4}' | grep -q ":${1}\$"
 }
 
 wait_for_port() {
