@@ -26,6 +26,26 @@ TBLPROPERTIES (
   'write.parquet.compression-codec'='snappy'
 );
 
+-- Daily OHLCV bars, backfilled from yfinance (poller/backfill.py -> market.quotes.daily).
+-- `trade_date` is a true Iceberg DATE; the SeaTunnel source keeps it as a string and
+-- the sink parses YYYY-MM-DD.
+CREATE TABLE IF NOT EXISTS bronze.quotes_daily (
+  symbol STRING NOT NULL,
+  trade_date DATE NOT NULL,
+  open DECIMAL(18, 2),
+  high DECIMAL(18, 2),
+  low DECIMAL(18, 2),
+  close DECIMAL(18, 2),
+  volume BIGINT,
+  ingested_at TIMESTAMP NOT NULL
+)
+USING iceberg
+LOCATION '/warehouse/bronze/quotes_daily'
+TBLPROPERTIES (
+  'format-version'='2',
+  'write.parquet.compression-codec'='snappy'
+);
+
 -- Market Fundamentals — P/E, EPS, dividend yield, beta, growth, etc.
 CREATE TABLE IF NOT EXISTS bronze.market_fundamentals (
   symbol STRING NOT NULL,

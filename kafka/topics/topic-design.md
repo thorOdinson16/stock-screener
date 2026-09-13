@@ -5,6 +5,7 @@
 | Topic                  | Partitions | Replication | Retention | Key            | Purpose |
 |-------------------------|------------|-------------|-----------|-----------------|---------|
 | `market.quotes`          | 16         | 1           | 1 day     | `symbol`        | Price/volume snapshots from the poller (high volume, frequent) |
+| `market.quotes.daily`    | 16         | 1           | 7 days    | `symbol`        | Historical daily OHLCV bars, one-off backfills (see `poller/backfill.py`) |
 | `market.fundamentals`     | 4          | 1           | 7 days    | `symbol`        | P/E, EPS, market cap, etc. (low volume, daily refresh) |
 | `market.scores`           | 4          | 1           | 7 days    | `symbol`        | Output of the scoring model, per poll cycle |
 | `market.deadletter`        | 2          | 1           | 30 days   | none (round-robin) | Records that failed validation in SeaTunnel |
@@ -53,3 +54,7 @@ used and Kafka round-robins across partitions.
 - **`market.deadletter`: 30 days.** Deliberately much longer — the whole point of a dead-letter
   topic is to inspect what went wrong later, so it shouldn't evict before anyone's had a chance to
   look. Volume should be low enough that this is cheap.
+- **`market.quotes.daily`: 7 days.** Backfilled in bulk (one record per symbol per trading day for
+  the requested period, e.g. ~500 symbols x ~500 days). The 7-day window is enough to replay or
+  re-ingest after a bug fix without re-running the slow yfinance backfill; once landed in
+  `bronze.quotes_daily`, Kafka is only a transport again.
