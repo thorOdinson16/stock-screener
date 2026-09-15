@@ -2,10 +2,11 @@
 pipeline.py — API endpoints that trigger and supervise the Airflow screening
 DAGs on behalf of the dashboard.
 
-    POST /api/pipeline/run       trigger screening_on_demand
-    POST /api/pipeline/retrain   trigger screening_retrain
-    GET  /api/pipeline/status    latest run + per-step states
-    GET  /api/pipeline/runs      recent runs
+    POST /api/pipeline/run          trigger screening_on_demand
+    POST /api/pipeline/retrain      trigger screening_retrain
+    POST /api/pipeline/maintenance  trigger screening_maintenance
+    GET  /api/pipeline/status       latest run + per-step states
+    GET  /api/pipeline/runs         recent runs
 """
 
 from fastapi import APIRouter, HTTPException
@@ -15,6 +16,14 @@ from api import airflow as af
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
+STEP_ORDER = {
+    af.DAG_ON_DEMAND: af.ON_DEMAND_STEPS,
+    af.DAG_RETRAIN: af.RETRAIN_STEPS,
+    af.DAG_MAINTENANCE: af.MAINTENANCE_STEPS,
+}
+
+ALL_DAGS = (af.DAG_ON_DEMAND, af.DAG_RETRAIN, af.DAG_MAINTENANCE)
+
 
 class RunRequest(BaseModel):
     full: bool = False
@@ -23,7 +32,7 @@ class RunRequest(BaseModel):
 
 
 def _steps_for(dag_id: str, task_instances: list[dict]) -> list[dict]:
-    order = af.ON_DEMAND_STEPS if dag_id == af.DAG_ON_DEMAND else af.RETRAIN_STEPS
+    order = STEP_ORDER.get(dag_id, [])
     by_id = {t.get("task_id"): t for t in task_instances}
     return [
         {"id": step, "state": (by_id.get(step) or {}).get("state") or "none"}
@@ -35,6 +44,8 @@ def _serialize(dag_id: str, run: dict, task_instances: list[dict] | None = None)
     conf = run.get("conf") or {}
     if dag_id == af.DAG_RETRAIN:
         run_type = "retrain"
+    elif dag_id == af.DAG_MAINTENANCE:
+        run_type = "maintenance"
     else:
         run_type = "full" if conf.get("full") else "quick"
     return {
@@ -84,6 +95,21 @@ def retrain_pipeline():
     return _serialize(af.DAG_RETRAIN, run)
 
 
+@router.post("/maintenance")
+def maintenance_pipeline():
+    active = af.find_active_run()
+    if active:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "A pipeline run is already active", "run": _serialize(active["dag_id"], active)},
+        )
+    try:
+        run = af.trigger_dag(af.DAG_MAINTENANCE, {})
+    except af.AirflowError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    return _serialize(af.DAG_MAINTENANCE, run)
+
+
 @router.get("/status")
 def pipeline_status(dag_id: str | None = None, run_id: str | None = None):
     try:
@@ -93,7 +119,7 @@ def pipeline_status(dag_id: str | None = None, run_id: str | None = None):
             return _serialize(dag_id, run, tis)
 
         latest = None
-        for candidate in (af.DAG_ON_DEMAND, af.DAG_RETRAIN):
+        for candidate in ALL_DAGS:
             for run in af.list_dag_runs(candidate, limit=5):
                 key = run.get("start_date") or run.get("logical_date") or ""
                 if latest is None or key > latest[0]:
@@ -113,7 +139,7 @@ def pipeline_status(dag_id: str | None = None, run_id: str | None = None):
 def pipeline_runs(limit: int = 10):
     runs = []
     try:
-        for candidate in (af.DAG_ON_DEMAND, af.DAG_RETRAIN):
+        for candidate in ALL_DAGS:
             for run in af.list_dag_runs(candidate, limit=limit):
                 runs.append(_serialize(candidate, run))
     except af.AirflowError as e:

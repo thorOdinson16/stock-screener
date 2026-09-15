@@ -133,8 +133,9 @@ docs/             Project specification and design notes
 - [x] Druid ingestion (Kafka supervisors)
 - [x] FastAPI backend + React dashboard (5 pages)
 - [x] On-demand pipeline: dashboard button -> Airflow DAGs + step status
+- [x] Dead-letter routing (SeaTunnel validation -> `market.deadletter`)
+- [x] Iceberg maintenance (compaction, manifest rewrite, snapshot expiry)
 - [ ] Spark Structured Streaming (near-real-time indicators)
-- [ ] Iceberg maintenance (compaction, snapshot expiry, time travel)
 - [ ] Experiments (throughput, latency, fault recovery, Iceberg, scalability, model performance)
 
 ## Notes / limitations

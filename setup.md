@@ -413,6 +413,21 @@ Run a pipeline without the UI (debugging):
 scripts/run_once.sh --full --history       # or: scripts/run_once.sh --limit 20
 ```
 
+### Iceberg maintenance
+
+Compacts small files, rewrites manifests and expires snapshots older than 7
+days (configurable). Trigger it from the dashboard **Maintenance** button, the
+Airflow DAG `screening_maintenance`, or directly:
+
+```bash
+scripts/maintenance.sh
+SNAPSHOT_RETENTION_DAYS=30 scripts/maintenance.sh
+DRY_RUN=1 scripts/maintenance.sh
+```
+
+See `iceberg/maintenance/README.md` for the procedure reference and time-travel /
+schema-evolution example queries.
+
 ### Reset and run once again
 
 Clears all Kafka topics and empties the Iceberg bronze + silver tables. Stop any running

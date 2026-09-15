@@ -38,3 +38,11 @@ export function useRetrainModel() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pipeline-status"] }),
   });
 }
+
+export function useRunMaintenance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<PipelineRun>("/pipeline/maintenance", {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pipeline-status"] }),
+  });
+}

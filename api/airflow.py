@@ -24,10 +24,12 @@ _KEYS = ("AIRFLOW_API_URL", "AIRFLOW_AUTH_URL", "AIRFLOW_USER", "AIRFLOW_PASSWOR
 
 DAG_ON_DEMAND = "screening_on_demand"
 DAG_RETRAIN = "screening_retrain"
+DAG_MAINTENANCE = "screening_maintenance"
 
-# UI step order for the on-demand DAG.
+# UI step order per DAG.
 ON_DEMAND_STEPS = ["preflight", "poll", "ingest", "indicators", "score", "serve", "wait_for_druid"]
 RETRAIN_STEPS = ["retrain"]
+MAINTENANCE_STEPS = ["maintenance"]
 
 ACTIVE_STATES = {"queued", "running"}
 
@@ -121,7 +123,7 @@ def list_task_instances(dag_id: str, run_id: str) -> list[dict]:
 
 def find_active_run() -> dict | None:
     """Returns the first active run across the screening DAGs, if any."""
-    for dag_id in (DAG_ON_DEMAND, DAG_RETRAIN):
+    for dag_id in (DAG_ON_DEMAND, DAG_RETRAIN, DAG_MAINTENANCE):
         try:
             for run in list_dag_runs(dag_id, limit=5):
                 if run.get("state") in ACTIVE_STATES:

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { usePipelineStatus, useRetrainModel, useRunPipeline } from "../hooks";
+import { usePipelineStatus, useRetrainModel, useRunMaintenance, useRunPipeline } from "../hooks";
 import type { PipelineRun, PipelineStep } from "../types";
 import { fmtDateTime } from "../format";
 
@@ -13,6 +13,7 @@ const STEP_LABELS: Record<string, string> = {
   serve: "Publish serving data",
   wait_for_druid: "Wait for Druid",
   retrain: "Retrain models",
+  maintenance: "Iceberg maintenance",
 };
 
 function stepBadge(state: string): string {
@@ -80,6 +81,7 @@ export default function PipelineControl() {
   const status = usePipelineStatus();
   const runPipeline = useRunPipeline();
   const retrain = useRetrainModel();
+  const maintenance = useRunMaintenance();
   const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -89,8 +91,8 @@ export default function PipelineControl() {
 
   const run = status.data;
   const active = run?.active ?? false;
-  const busy = active || runPipeline.isPending || retrain.isPending;
-  const error = runPipeline.error || retrain.error;
+  const busy = active || runPipeline.isPending || retrain.isPending || maintenance.isPending;
+  const error = runPipeline.error || retrain.error || maintenance.error;
 
   // Refresh dashboard data whenever a run completes successfully.
   const previousState = useRef<string | undefined>(undefined);
@@ -125,6 +127,18 @@ export default function PipelineControl() {
           title="Rebuild the training set and retrain the scoring models"
         >
           {retrain.isPending ? "Retraining…" : "Retrain model"}
+        </button>
+        <button
+          className="btn"
+          onClick={() => {
+            if (window.confirm("Run Iceberg maintenance? This compacts tables and expires old snapshots.")) {
+              maintenance.mutate();
+            }
+          }}
+          disabled={busy}
+          title="Compact tables, rewrite manifests and expire old snapshots"
+        >
+          {maintenance.isPending ? "Maintaining…" : "Maintenance"}
         </button>
       </div>
 
