@@ -12,6 +12,7 @@ import { useApi } from "../hooks";
 import type { Overview, StockRow } from "../types";
 import { changeClass, fmtCompact, fmtNum, fmtPct } from "../format";
 import { Card, QueryView, StatCard, Updated } from "../components/ui";
+import PipelineControl from "../components/PipelineControl";
 
 function MiniTable({ rows, title }: { rows: StockRow[]; title: string }) {
   return (
@@ -59,7 +60,10 @@ export default function Dashboard() {
           <h1 className="page-title">Market Dashboard</h1>
           <p className="page-sub">Latest scored snapshot across the NIFTY 500 universe</p>
         </div>
-        <Updated at={overview.dataUpdatedAt} />
+        <div className="head-right">
+          <PipelineControl />
+          <Updated at={overview.dataUpdatedAt} />
+        </div>
       </div>
 
       <QueryView query={overview}>

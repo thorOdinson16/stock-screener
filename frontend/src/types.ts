@@ -104,3 +104,27 @@ export interface ComparisonResponse {
   k: number;
   labels: Record<string, Record<string, ModelMetric>>;
 }
+
+export interface PipelineStep {
+  id: string;
+  state: string;
+}
+
+export interface PipelineRun {
+  dag_id: string;
+  dag_run_id: string;
+  state: string;
+  run_type: string;
+  conf: Record<string, unknown>;
+  start_date: string | null;
+  end_date: string | null;
+  active: boolean;
+  steps: PipelineStep[];
+  airflow_url: string;
+}
+
+export interface RunOptions {
+  full: boolean;
+  universe_limit?: number | null;
+  publish_history: boolean;
+}

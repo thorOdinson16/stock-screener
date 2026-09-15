@@ -83,5 +83,10 @@ docs/             Project specification and design notes
 
 Serves the Druid `screener`, `stock_scores`, `price_history` and `market_quotes`
 datasources: market overview, ranked top picks, a filterable screener, stock
-detail with price/indicator charts, and the model-evaluation report. See
+detail with price/indicator charts, and the model-evaluation report.
+
+The Dashboard header has a **Run pipeline** button (and a **Retrain model**
+action). Both trigger Airflow DAGs (`screening_on_demand`, `screening_retrain`)
+via the Airflow REST API and stream step-by-step status back to the UI. Configure
+`config/airflow.env` (copy from `config/airflow.env.example`) first. See
 `setup.md` for the ingestion steps that populate Druid.

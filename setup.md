@@ -372,18 +372,48 @@ Pages: market overview, top picks, screener, stock detail, model evaluation.
 Manual refresh by default; toggle 30s auto-refresh in the sidebar. Stop with
 `./stop-ui.sh`.
 
+### On-demand pipeline (button / Airflow)
+
+The Dashboard header's **Run pipeline** button (Quick or Full, with an optional
+universe limit and price-history publish) and the **Retrain model** action trigger
+Airflow DAGs, which run the `scripts/` wrappers step by step.
+
+Configure the Airflow REST credentials once:
+
+```bash
+cp config/airflow.env.example config/airflow.env
+# fill AIRFLOW_PASSWORD from ~/airflow/simple_auth_manager_passwords.json.generated
+```
+
+`start-stack.sh` points Airflow's `dags_folder` at this repo's `airflow/dags/`
+and creates the `screening` pool (1 slot) so runs never overlap. The DAGs
+(`screening_on_demand`, `screening_retrain`) can also be triggered from the
+Airflow UI at http://localhost:8080.
+
+Run a pipeline without the UI (debugging):
+
+```bash
+scripts/run_once.sh --full --history       # or: scripts/run_once.sh --limit 20
+```
+
 ### Reset and run once again
 
 Clears all Kafka topics and empties the Iceberg bronze + silver tables. Stop any running
 SeaTunnel jobs first (Ctrl-C, or `for p in $(pgrep -f "SeaTunnel[C]lient"); do kill "$p"; done`).
 
 ```bash
-# 1. delete and recreate Kafka topics
+# 1. delete and recreate Kafka topics, and reset the SeaTunnel consumer groups
 for t in market.quotes market.quotes.daily market.fundamentals market.scores market.screener market.history market.deadletter; do
   $KAFKA_HOME/bin/kafka-topics.sh --delete --topic "$t" --bootstrap-server localhost:9092
 done
 sleep 5
 ./kafka/topics/create-topics.sh
+
+# group_offsets means SeaTunnel resumes from committed offsets; clear them so a
+# fresh topic is re-read from the start.
+for g in seatunnel-bronze-quotes seatunnel-bronze-quotes-daily seatunnel-bronze-fundamentals; do
+  $KAFKA_HOME/bin/kafka-consumer-groups.sh --delete --group "$g" --bootstrap-server localhost:9092
+done
 
 # 2. drop Iceberg tables and remove their warehouse data
 spark-sql \
