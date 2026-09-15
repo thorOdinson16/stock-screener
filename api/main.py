@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api import druid
 from api.druid import DruidError, LATEST_SNAPSHOT, query, quote
 from api import universe
+from api.pipeline import router as pipeline_router
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _COMPARISON_PATH = os.path.join(
@@ -58,6 +59,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(pipeline_router)
 
 
 def _qcols(columns: list[str]) -> str:
