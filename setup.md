@@ -108,9 +108,11 @@ spark-sql \
 
 ### Run SeaTunnel ingestion jobs
 
-These are **BATCH** jobs: each drains its Kafka topic (everything available at
-start), commits to Iceberg, then terminates on its own. Re-running re-reads from
-`earliest`, so clear the topics/tables first to avoid duplicates.
+These are **BATCH** jobs: each drains its Kafka topic (new records since the
+consumer group's committed offset), commits to Iceberg, then terminates on its
+own. `start_mode = group_offsets` means re-running consumes only new messages;
+`kafka.config.auto.offset.reset = earliest` covers partitions that have no
+committed offset yet (so nothing is silently skipped).
 
 ```bash
 # Kafka -> Iceberg bronze (quotes)
@@ -123,8 +125,23 @@ $SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/quotes-daily-job.con
 $SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/fundamentals-job.conf
 ```
 
-Each job prints its result and exits. Commits are visible in the engine log:
-`~/seatunnel/logs/seatunnel-engine-server.log` (`do commit table`).
+Each job fans out: valid records go to Iceberg bronze, invalid records are routed
+to the `market.deadletter` topic. Validation rules: quotes require `symbol`,
+`close > 0`, `volume >= 0`; daily bars require `symbol`/`trade_date`/`close > 0`;
+fundamentals require `symbol`. Each job prints its result and exits. Commits are
+visible in the engine log: `~/seatunnel/logs/seatunnel-engine-server.log`
+(`do commit table`).
+
+### Inspect dead-letter records
+
+```bash
+$KAFKA_HOME/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic market.deadletter --from-beginning --max-messages 10
+```
+
+Each message carries the identifying fields plus `source_topic`, `reason` and
+`failed_at` (e.g. `reason: non_positive_close`).
 
 ### Verify ingested data
 ```bash
