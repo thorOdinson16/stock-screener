@@ -1,0 +1,104 @@
+{
+  "type": "kafka",
+  "dataSchema": {
+    "dataSource": "price_history",
+    "timestampSpec": {
+      "column": "trade_date",
+      "format": "auto"
+    },
+    "dimensionsSpec": {
+      "dimensions": [
+        "symbol"
+      ]
+    },
+    "metricsSpec": [
+      {
+        "type": "doubleSum",
+        "name": "close",
+        "fieldName": "close"
+      },
+      {
+        "type": "longSum",
+        "name": "volume",
+        "fieldName": "volume"
+      },
+      {
+        "type": "doubleSum",
+        "name": "sma_20",
+        "fieldName": "sma_20"
+      },
+      {
+        "type": "doubleSum",
+        "name": "sma_50",
+        "fieldName": "sma_50"
+      },
+      {
+        "type": "doubleSum",
+        "name": "sma_200",
+        "fieldName": "sma_200"
+      },
+      {
+        "type": "doubleSum",
+        "name": "ema_12",
+        "fieldName": "ema_12"
+      },
+      {
+        "type": "doubleSum",
+        "name": "ema_26",
+        "fieldName": "ema_26"
+      },
+      {
+        "type": "doubleSum",
+        "name": "rsi_14",
+        "fieldName": "rsi_14"
+      },
+      {
+        "type": "doubleSum",
+        "name": "macd",
+        "fieldName": "macd"
+      },
+      {
+        "type": "doubleSum",
+        "name": "macd_signal",
+        "fieldName": "macd_signal"
+      },
+      {
+        "type": "doubleSum",
+        "name": "volatility_20d",
+        "fieldName": "volatility_20d"
+      },
+      {
+        "type": "doubleSum",
+        "name": "volume_ratio",
+        "fieldName": "volume_ratio"
+      }
+    ],
+    "granularitySpec": {
+      "type": "uniform",
+      "segmentGranularity": "month",
+      "queryGranularity": "day",
+      "rollup": false
+    }
+  },
+  "ioConfig": {
+    "type": "kafka",
+    "inputFormat": {
+      "type": "json"
+    },
+    "consumerProperties": {
+      "bootstrap.servers": "localhost:9092"
+    },
+    "topic": "market.history",
+    "useEarliestOffset": true,
+    "taskCount": 1,
+    "replicas": 1,
+    "taskDuration": "PT5M",
+    "completionTimeout": "PT10M"
+  },
+  "tuningConfig": {
+    "type": "kafka",
+    "maxRowsInMemory": 100000,
+    "maxRowsPerSegment": 500000,
+    "intermediateHandoffPeriod": "PT1M"
+  }
+}

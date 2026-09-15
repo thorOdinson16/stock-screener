@@ -25,6 +25,8 @@ create_topic market.quotes        16  1            86400000     # 1 day
 create_topic market.quotes.daily  16  1            604800000    # 7 days (historical daily bars, backfilled)
 create_topic market.fundamentals   4  1            604800000    # 7 days (changes slowly, keep longer for debugging)
 create_topic market.scores         4  1            604800000    # 7 days
+create_topic market.screener       2  1            604800000    # 7 days (latest per-symbol snapshot for the UI)
+create_topic market.history        4  1            604800000    # 7 days (daily indicator bars for charts)
 create_topic market.deadletter     2  1            2592000000   # 30 days (want to keep failures around to inspect)
 
 echo

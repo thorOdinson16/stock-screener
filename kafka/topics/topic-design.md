@@ -8,6 +8,8 @@
 | `market.quotes.daily`    | 16         | 1           | 7 days    | `symbol`        | Historical daily OHLCV bars, one-off backfills (see `poller/backfill.py`) |
 | `market.fundamentals`     | 4          | 1           | 7 days    | `symbol`        | P/E, EPS, market cap, etc. (low volume, daily refresh) |
 | `market.scores`           | 4          | 1           | 7 days    | `symbol`        | Output of the scoring model, per poll cycle |
+| `market.screener`         | 2          | 1           | 7 days    | `symbol`        | Latest per-symbol snapshot (indicators + fundamentals + scores) for the UI |
+| `market.history`          | 4          | 1           | 7 days    | `symbol`        | Daily indicator bars for the UI price/indicator charts |
 | `market.deadletter`        | 2          | 1           | 30 days   | none (round-robin) | Records that failed validation in SeaTunnel |
 
 Replication factor is 1 across the board since this is a single-broker deployment — no
@@ -58,3 +60,8 @@ used and Kafka round-robins across partitions.
   the requested period, e.g. ~500 symbols x ~500 days). The 7-day window is enough to replay or
   re-ingest after a bug fix without re-running the slow yfinance backfill; once landed in
   `bronze.quotes_daily`, Kafka is only a transport again.
+- **`market.screener` / `market.history`: 7 days.** Serving topics for the dashboard. `screener`
+  carries a small latest-per-symbol snapshot produced by `spark/jobs/publish_screener.py`, consumed
+  by Druid; `history` carries the daily indicator bars (~500 symbols x ~500 days) published by
+  `spark/jobs/publish_history.py`. Like the daily backfill, they only need to survive long enough
+  for Druid to ingest them — the durable copy remains in Iceberg.

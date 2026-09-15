@@ -1,0 +1,217 @@
+{
+  "type": "kafka",
+  "dataSchema": {
+    "dataSource": "screener",
+    "timestampSpec": {
+      "column": "snapshot_at",
+      "format": "auto"
+    },
+    "dimensionsSpec": {
+      "dimensions": [
+        "symbol",
+        "industry",
+        "company_name",
+        "trade_date"
+      ]
+    },
+    "metricsSpec": [
+      {
+        "type": "doubleSum",
+        "name": "close",
+        "fieldName": "close"
+      },
+      {
+        "type": "doubleSum",
+        "name": "change_percent",
+        "fieldName": "change_percent"
+      },
+      {
+        "type": "longSum",
+        "name": "volume",
+        "fieldName": "volume"
+      },
+      {
+        "type": "doubleSum",
+        "name": "sma_20",
+        "fieldName": "sma_20"
+      },
+      {
+        "type": "doubleSum",
+        "name": "sma_50",
+        "fieldName": "sma_50"
+      },
+      {
+        "type": "doubleSum",
+        "name": "sma_200",
+        "fieldName": "sma_200"
+      },
+      {
+        "type": "doubleSum",
+        "name": "ema_12",
+        "fieldName": "ema_12"
+      },
+      {
+        "type": "doubleSum",
+        "name": "ema_26",
+        "fieldName": "ema_26"
+      },
+      {
+        "type": "doubleSum",
+        "name": "rsi_14",
+        "fieldName": "rsi_14"
+      },
+      {
+        "type": "doubleSum",
+        "name": "macd",
+        "fieldName": "macd"
+      },
+      {
+        "type": "doubleSum",
+        "name": "macd_signal",
+        "fieldName": "macd_signal"
+      },
+      {
+        "type": "doubleSum",
+        "name": "volatility_20d",
+        "fieldName": "volatility_20d"
+      },
+      {
+        "type": "doubleSum",
+        "name": "volume_ratio",
+        "fieldName": "volume_ratio"
+      },
+      {
+        "type": "doubleSum",
+        "name": "distance_from_52w_high",
+        "fieldName": "distance_from_52w_high"
+      },
+      {
+        "type": "doubleSum",
+        "name": "distance_from_52w_low",
+        "fieldName": "distance_from_52w_low"
+      },
+      {
+        "type": "doubleSum",
+        "name": "price_momentum_1m",
+        "fieldName": "price_momentum_1m"
+      },
+      {
+        "type": "doubleSum",
+        "name": "price_momentum_3m",
+        "fieldName": "price_momentum_3m"
+      },
+      {
+        "type": "doubleSum",
+        "name": "price_momentum_6m",
+        "fieldName": "price_momentum_6m"
+      },
+      {
+        "type": "doubleSum",
+        "name": "pe_ratio",
+        "fieldName": "pe_ratio"
+      },
+      {
+        "type": "doubleSum",
+        "name": "pb_ratio",
+        "fieldName": "pb_ratio"
+      },
+      {
+        "type": "doubleSum",
+        "name": "eps",
+        "fieldName": "eps"
+      },
+      {
+        "type": "doubleSum",
+        "name": "dividend_yield",
+        "fieldName": "dividend_yield"
+      },
+      {
+        "type": "doubleSum",
+        "name": "market_cap",
+        "fieldName": "market_cap"
+      },
+      {
+        "type": "doubleSum",
+        "name": "beta",
+        "fieldName": "beta"
+      },
+      {
+        "type": "doubleSum",
+        "name": "fifty_two_week_high",
+        "fieldName": "fifty_two_week_high"
+      },
+      {
+        "type": "doubleSum",
+        "name": "fifty_two_week_low",
+        "fieldName": "fifty_two_week_low"
+      },
+      {
+        "type": "doubleSum",
+        "name": "return_on_equity",
+        "fieldName": "return_on_equity"
+      },
+      {
+        "type": "doubleSum",
+        "name": "debt_to_equity",
+        "fieldName": "debt_to_equity"
+      },
+      {
+        "type": "doubleSum",
+        "name": "revenue_growth",
+        "fieldName": "revenue_growth"
+      },
+      {
+        "type": "doubleSum",
+        "name": "earnings_growth",
+        "fieldName": "earnings_growth"
+      },
+      {
+        "type": "doubleSum",
+        "name": "score_5d",
+        "fieldName": "score_5d"
+      },
+      {
+        "type": "longSum",
+        "name": "rank_5d",
+        "fieldName": "rank_5d"
+      },
+      {
+        "type": "doubleSum",
+        "name": "score_21d",
+        "fieldName": "score_21d"
+      },
+      {
+        "type": "longSum",
+        "name": "rank_21d",
+        "fieldName": "rank_21d"
+      }
+    ],
+    "granularitySpec": {
+      "type": "uniform",
+      "segmentGranularity": "day",
+      "queryGranularity": "none",
+      "rollup": false
+    }
+  },
+  "ioConfig": {
+    "type": "kafka",
+    "inputFormat": {
+      "type": "json"
+    },
+    "consumerProperties": {
+      "bootstrap.servers": "localhost:9092"
+    },
+    "topic": "market.screener",
+    "useEarliestOffset": true,
+    "taskCount": 1,
+    "replicas": 1,
+    "taskDuration": "PT5M",
+    "completionTimeout": "PT10M"
+  },
+  "tuningConfig": {
+    "type": "kafka",
+    "maxRowsInMemory": 100000,
+    "maxRowsPerSegment": 500000,
+    "intermediateHandoffPeriod": "PT1M"
+  }
+}

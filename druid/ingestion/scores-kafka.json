@@ -1,0 +1,58 @@
+{
+  "type": "kafka",
+  "dataSchema": {
+    "dataSource": "stock_scores",
+    "timestampSpec": {
+      "column": "scored_at",
+      "format": "auto"
+    },
+    "dimensionsSpec": {
+      "dimensions": [
+        "symbol",
+        "label",
+        "model_name",
+        "model_version",
+        "trade_date"
+      ]
+    },
+    "metricsSpec": [
+      {
+        "type": "doubleSum",
+        "name": "score",
+        "fieldName": "score"
+      },
+      {
+        "type": "longSum",
+        "name": "rank",
+        "fieldName": "rank"
+      }
+    ],
+    "granularitySpec": {
+      "type": "uniform",
+      "segmentGranularity": "day",
+      "queryGranularity": "none",
+      "rollup": false
+    }
+  },
+  "ioConfig": {
+    "type": "kafka",
+    "inputFormat": {
+      "type": "json"
+    },
+    "consumerProperties": {
+      "bootstrap.servers": "localhost:9092"
+    },
+    "topic": "market.scores",
+    "useEarliestOffset": true,
+    "taskCount": 1,
+    "replicas": 1,
+    "taskDuration": "PT5M",
+    "completionTimeout": "PT10M"
+  },
+  "tuningConfig": {
+    "type": "kafka",
+    "maxRowsInMemory": 100000,
+    "maxRowsPerSegment": 500000,
+    "intermediateHandoffPeriod": "PT1M"
+  }
+}
