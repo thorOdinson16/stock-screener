@@ -1,10 +1,38 @@
 # Real-Time Stock Screening & Scoring Platform
 
-Distributed platform that continuously screens the NIFTY 500 universe: yfinance poller -> Kafka ->
-SeaTunnel -> HDFS/Iceberg -> Spark Structured Streaming (technical indicators) -> Spark MLlib
-(scoring model) -> Druid (fast ranked queries), orchestrated by Airflow.
+Distributed platform that screens the NIFTY 500 universe: `yfinance` poller -> Kafka ->
+SeaTunnel -> HDFS/Iceberg -> Spark (technical indicators) -> Spark MLlib (scoring model) ->
+Druid (low-latency ranked queries), driven by a React dashboard and orchestrated by Airflow.
+
+The pipeline is **on-demand** — press **Run pipeline** in the dashboard (or trigger the Airflow
+DAG) and it refreshes the whole universe end to end. Druid ingests the serving topics continuously,
+so query latency is low even though the batch pipeline is triggered rather than always-on.
 
 Full spec: see `docs/project-spec.md`.
+
+## Pipeline
+
+```text
+React dashboard ──POST /api/pipeline/run──▶ FastAPI ──REST──▶ Airflow DAG
+                                                                  │
+  yfinance poller ─▶ Kafka ─▶ SeaTunnel ─▶ Iceberg bronze ─────────┤
+                                                                  ▼
+                        Spark indicators ─▶ silver ─▶ Spark MLlib scoring ─▶ gold
+                                                                  │
+                    Kafka (market.screener / market.history / market.scores)
+                                                                  ▼
+                                                          Druid ─▶ dashboard
+```
+
+Stages (each is a `scripts/` wrapper run as an Airflow task):
+
+1. **preflight** – check HDFS/Kafka/Druid/SeaTunnel are up and a model is selected
+2. **poll** – fetch quotes (and fundamentals on Full runs) via `yfinance`
+3. **ingest** – SeaTunnel drains Kafka into Iceberg bronze
+4. **indicators** – Spark computes SMA/EMA/RSI/MACD/volatility/momentum into silver
+5. **score** – Spark MLlib scores and ranks the latest cross-section into gold
+6. **serve** – publish the latest snapshot to Kafka for Druid ingestion
+7. **wait_for_druid** – block until Druid is serving the fresh snapshot
 
 ## Stack (native install, no Docker for core services)
 
@@ -29,8 +57,8 @@ Full spec: see `docs/project-spec.md`.
 ./stop-stack.sh     # reverse order teardown
 ```
 
-Logs: `~/stack-logs/<service>.log`
-Service endpoints once running:
+`start-stack.sh` also points Airflow's `dags_folder` at this repo and creates the `screening`
+pool. Logs: `~/stack-logs/<service>.log`.
 
 - HDFS NameNode UI - http://localhost:9870
 - Hive Metastore - thrift://localhost:9083
@@ -39,40 +67,20 @@ Service endpoints once running:
 - Druid console - http://localhost:8888
 - Airflow UI - http://localhost:8080
 
-## Repository layout
+## Running the pipeline
 
-```
-poller/           yfinance-based scheduled poller for the NIFTY 500 universe
-kafka/            Topic definitions, broker/producer/consumer configs
-seatunnel/        SeaTunnel job configs (Kafka -> HDFS/Iceberg ingestion)
-spark/            Structured Streaming jobs (technical indicators), batch jobs
-iceberg/          Table schemas, DDL, maintenance (compaction, expiry) scripts
-ml/               Feature engineering, MLlib training/evaluation, saved models
-api/              FastAPI backend serving Druid (dashboard BFF)
-frontend/         React + Vite dashboard (5 pages)
-airflow/dags/     Orchestration DAGs (polling schedule, fundamentals refresh, maintenance)
-druid/            Ingestion specs, example ranking queries
-monitoring/       Metrics/observability config
-tests/            Unit and integration tests
-benchmarks/       Throughput/latency/scalability experiment scripts + results
-docs/             Project specification and design notes
+From the dashboard (recommended): **Run pipeline** (Quick = quotes only, or Full = quotes +
+fundamentals; optional universe limit and price-history publish) and **Retrain model**. The
+UI streams step-by-step status and refreshes the data when the run succeeds.
+
+Or without the UI:
+
+```bash
+scripts/run_once.sh --full --history     # or: scripts/run_once.sh --limit 20
 ```
 
-## Status
-
-- [x] Environment installed and version-pinned
-- [x] Orchestrated start/stop scripts
-- [x] Repo skeleton
-- [x] Project spec (pivoted to stock screening/scoring)
-- [x] Kafka topic design + creation
-- [x] NIFTY 500 poller (yfinance)
-- [x] SeaTunnel ingestion (Kafka -> Iceberg bronze)
-- [x] Spark technical indicators (bronze -> silver)
-- [x] Stock scoring model (Spark MLlib)
-- [x] Druid ingestion + FastAPI + React dashboard (5 pages)
-- [ ] Spark Structured Streaming (near-real-time indicators)
-- [ ] Airflow DAGs
-- [ ] Experiments (throughput, latency, fault recovery, Iceberg, scalability, model performance)
+Or trigger the DAGs directly in the Airflow UI (`screening_on_demand`, `screening_retrain`).
+Overlapping runs are prevented by a 1-slot `screening` pool.
 
 ## Web dashboard
 
@@ -81,12 +89,57 @@ docs/             Project specification and design notes
 ./stop-ui.sh
 ```
 
-Serves the Druid `screener`, `stock_scores`, `price_history` and `market_quotes`
-datasources: market overview, ranked top picks, a filterable screener, stock
-detail with price/indicator charts, and the model-evaluation report.
+Pages: **Dashboard** (breadth, gainers/losers, sector performance), **Top Picks** (5d/21d),
+**Screener** (filter by industry/score/P-E/RSI/momentum; CSV export), **Stock Detail**
+(price + SMA overlays, RSI, MACD, fundamentals), **Model** (IC / Precision@K / turnover vs the
+rule baseline). Manual refresh by default; toggle 30s auto-refresh in the sidebar.
 
-The Dashboard header has a **Run pipeline** button (and a **Retrain model**
-action). Both trigger Airflow DAGs (`screening_on_demand`, `screening_retrain`)
-via the Airflow REST API and stream step-by-step status back to the UI. Configure
-`config/airflow.env` (copy from `config/airflow.env.example`) first. See
-`setup.md` for the ingestion steps that populate Druid.
+See `setup.md` for the full ingestion + ML runbook.
+
+## Configuration
+
+- `config/pipeline.env` — service homes, Spark packages/memory, Druid/Kafka endpoints, defaults
+- `config/airflow.env` — Airflow REST credentials; copy from `config/airflow.env.example`
+  (password in `~/airflow/simple_auth_manager_passwords.json.generated`); gitignored
+
+## Repository layout
+
+```
+poller/           yfinance poller + historical daily-bar backfill
+kafka/            Topic definitions + create-topics.sh
+seatunnel/        SeaTunnel job configs (Kafka -> Iceberg bronze)
+spark/jobs/       Spark batch jobs (indicators, training set, scoring, serving publish)
+iceberg/schemas/  Bronze / silver / gold + ML table DDL
+ml/               Feature engineering, MLlib training/evaluation, saved models
+api/              FastAPI backend (Druid queries + Airflow pipeline trigger)
+frontend/         React + Vite dashboard (5 pages)
+airflow/dags/     On-demand + retrain DAGs
+druid/ingestion/  Druid Kafka supervisor specs + submit.sh
+scripts/          Pipeline step wrappers (poll/ingest/indicators/score/serve/retrain)
+config/           Pipeline + Airflow connection config
+tests/            Unit tests (indicators, features, metrics)
+benchmarks/       Throughput/latency/scalability experiments (pending)
+docs/             Project specification and design notes
+```
+
+## Status
+
+- [x] Environment installed and version-pinned
+- [x] Orchestrated start/stop scripts
+- [x] NIFTY 500 poller + historical backfill (yfinance)
+- [x] Kafka topics + SeaTunnel ingestion (Kafka -> Iceberg bronze)
+- [x] Spark technical indicators (bronze -> silver)
+- [x] Stock scoring model (Spark MLlib) + evaluation
+- [x] Druid ingestion (Kafka supervisors)
+- [x] FastAPI backend + React dashboard (5 pages)
+- [x] On-demand pipeline: dashboard button -> Airflow DAGs + step status
+- [ ] Spark Structured Streaming (near-real-time indicators)
+- [ ] Iceberg maintenance (compaction, snapshot expiry, time travel)
+- [ ] Experiments (throughput, latency, fault recovery, Iceberg, scalability, model performance)
+
+## Notes / limitations
+
+- Data comes from `yfinance` (unofficial, delayed) — fine for research, not for trading decisions.
+- The ML signal is weak but positive (IC ≈ 0.02–0.05), which is expected for noisy forward returns.
+- Single-broker Kafka (`replication.factor=1`) and a single HDFS DataNode: no fault tolerance yet.
+- `market.quotes` Kafka retention is 1 day; run the poller to repopulate it before its Druid datasource exists.
