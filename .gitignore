@@ -28,3 +28,8 @@ airflow/logs/
 airflow/*.pid
 
 *output.md
+
+# ML artifacts (models, registry, selection) and evaluation output
+ml/models/*
+!ml/models/.gitkeep
+ml/evaluation/results/

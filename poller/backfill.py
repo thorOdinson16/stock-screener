@@ -11,6 +11,8 @@ Usage:
     python backfill.py --once                     # full universe, 2y of daily bars
     python backfill.py --once --universe-limit 20 # quick test
     python backfill.py --once --period 1y
+    python backfill.py --once --include-index      # also backfill the benchmark index (^NSEI)
+    python backfill.py --once --index-only          # backfill only the benchmark index
 
 See docs/project-spec.md §3.2 (historical backfills) and §6.3 (derived features).
 """
@@ -32,6 +34,19 @@ logging.basicConfig(
 logger = logging.getLogger("backfill")
 
 DAILY_TOPIC = "market.quotes.daily"
+
+# Benchmark indices are ingested through the same daily pipeline but excluded from
+# the tradable universe (training + scoring). Used as the index benchmark by the
+# evaluation layer (ml/evaluation/evaluate.py).
+INDEX_SYMBOLS = (
+    Stock(
+        company_name="NIFTY 50 Index",
+        industry="Index",
+        symbol="^NSEI",
+        yf_symbol="^NSEI",
+        isin="",
+    ),
+)
 
 
 def _num(value, cast=float):
@@ -104,12 +119,31 @@ def main():
         help="Limit universe to first N symbols (for testing)",
     )
     parser.add_argument("--topic", default=DAILY_TOPIC)
+    parser.add_argument(
+        "--include-index",
+        action="store_true",
+        help="Also backfill the benchmark index (^NSEI) into the same daily topic",
+    )
+    parser.add_argument(
+        "--index-only",
+        action="store_true",
+        help="Backfill only the benchmark index symbols (skip the NIFTY 500 universe)",
+    )
     args = parser.parse_args()
 
-    logger.info("Loading NIFTY 500 universe...")
-    universe = get_universe()
-    if args.universe_limit:
-        universe = universe[: args.universe_limit]
+    if args.index_only:
+        universe = list(INDEX_SYMBOLS)
+        logger.info("Backfilling benchmark index only: %s", [s.yf_symbol for s in universe])
+    else:
+        logger.info("Loading NIFTY 500 universe...")
+        universe = get_universe()
+        if args.universe_limit:
+            universe = universe[: args.universe_limit]
+        if args.include_index:
+            universe = universe + list(INDEX_SYMBOLS)
+            logger.info(
+                "Including benchmark index symbols: %s", [s.yf_symbol for s in INDEX_SYMBOLS]
+            )
     logger.info("Backfilling %d symbols: period=%s interval=%s", len(universe), args.period, args.interval)
 
     producer = MarketDataProducer(bootstrap_servers=args.bootstrap_servers)

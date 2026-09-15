@@ -208,6 +208,122 @@ print('ema_12', round(r['ema_12'], 4), 'rsi_14', round(r['rsi_14'], 4),
 "
 ```
 
+### Backfill the benchmark index (optional but needed for index-relative metrics)
+
+The evaluation layer benchmarks top-K picks against the cross-sectional universe
+mean **and** the NIFTY index. The index rides the same daily pipeline but is
+excluded from the tradable universe, training and scoring:
+
+```bash
+cd poller && source .venv/bin/activate
+python backfill.py --once --include-index --period 2y
+```
+
+This publishes `^NSEI` daily bars to `market.quotes.daily`; re-run the
+`quotes-daily` SeaTunnel job (and the indicator job) so the index reaches silver.
+
+If the NIFTY 500 daily bars are already ingested, add the index without
+re-publishing the whole universe: clear the topic, publish only the index, ingest,
+then recompute indicators:
+
+```bash
+$KAFKA_HOME/bin/kafka-topics.sh --delete --topic market.quotes.daily --bootstrap-server localhost:9092
+sleep 5 && ./kafka/topics/create-topics.sh
+python backfill.py --once --index-only --period 2y
+$SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/quotes-daily-job.conf
+```
+
+### Create gold + ML tables
+
+```bash
+spark-sql \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+  --conf spark.sql.catalog.iceberg.type=hadoop \
+  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
+  --conf spark.sql.defaultCatalog=iceberg \
+  -f iceberg/schemas/gold-schema.sql
+```
+
+Creates `gold.stock_scores`, `gold.top_picks`, `ml.training_dataset`.
+
+### Unit-test the feature/label/metric math
+
+```bash
+python tests/test_features.py
+```
+
+### Build the training dataset
+
+Adds both forward-return labels, the two benchmark returns, and the
+leakage-safe train/embargo/test split:
+
+```bash
+spark-submit \
+  --driver-memory 4g --master "local[8]" \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  spark/jobs/build_training.py
+```
+
+Expect roughly one row per `(symbol, trade_date)` for non-index symbols; the last
+5/21 bars per symbol have null labels and the split is `train`/`embargo`/`test`.
+
+### Train models
+
+Trains GBT, RandomForest and LinearRegression for each label (`fwd_ret_5d`,
+`fwd_ret_21d`) on the `train` split only. Tree training needs a larger driver heap
+and bounded task parallelism when running in local mode, hence the flags below:
+
+```bash
+spark-submit \
+  --driver-memory 6g --master "local[8]" \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  ml/training/train_model.py
+```
+
+Artifacts go to `ml/models/<algo>_<label>_<timestamp>/`, indexed by
+`ml/models/registry.json`.
+
+### Evaluate + select the best model per label
+
+Scores every model and the interpretable rule baseline (spec §13) on the `test`
+split, reporting Information Coefficient, Precision@K (vs both benchmarks),
+RMSE/MAE, mean top-K forward return and turnover:
+
+```bash
+spark-submit \
+  --driver-memory 4g --master "local[8]" \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  ml/evaluation/evaluate.py
+```
+
+Writes `ml/evaluation/results/comparison.{json,md}` and
+`ml/models/selected.json`.
+
+### Score the universe -> gold + Kafka
+
+```bash
+spark-submit \
+  --driver-memory 4g --master "local[8]" \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0,org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.3 \
+  spark/jobs/score_stocks.py
+```
+
+Ranks the latest cross-section, writes `gold.stock_scores` + `gold.top_picks` for
+the latest trade date (idempotent — re-runs replace that date), and publishes to
+`market.scores`. If the Kafka connector isn't on the classpath the gold writes
+still succeed and publishing is skipped with a warning. Verify:
+
+```bash
+spark-sql \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+  --conf spark.sql.catalog.iceberg.type=hadoop \
+  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
+  --conf spark.sql.defaultCatalog=iceberg \
+  -e "SELECT * FROM gold.top_picks ORDER BY label, rank LIMIT 20;"
+```
+
 ### Reset and run once again
 
 Clears all Kafka topics and empties the Iceberg bronze + silver tables. Stop any running
@@ -228,9 +344,9 @@ spark-sql \
   --conf spark.sql.catalog.iceberg.type=hadoop \
   --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
   --conf spark.sql.defaultCatalog=iceberg \
-  -e "DROP TABLE IF EXISTS bronze.market_quotes; DROP TABLE IF EXISTS bronze.quotes_daily; DROP TABLE IF EXISTS bronze.market_fundamentals; DROP TABLE IF EXISTS silver.quotes_enriched; DROP TABLE IF EXISTS silver.fundamentals_clean;"
+  -e "DROP TABLE IF EXISTS bronze.market_quotes; DROP TABLE IF EXISTS bronze.quotes_daily; DROP TABLE IF EXISTS bronze.market_fundamentals; DROP TABLE IF EXISTS silver.quotes_enriched; DROP TABLE IF EXISTS silver.fundamentals_clean; DROP TABLE IF EXISTS ml.training_dataset; DROP TABLE IF EXISTS gold.stock_scores; DROP TABLE IF EXISTS gold.top_picks;"
 
-hdfs dfs -rm -r -f /warehouse/bronze/market_quotes /warehouse/bronze/quotes_daily /warehouse/bronze/market_fundamentals /warehouse/silver
+hdfs dfs -rm -r -f /warehouse/bronze/market_quotes /warehouse/bronze/quotes_daily /warehouse/bronze/market_fundamentals /warehouse/silver /warehouse/ml /warehouse/gold
 
 # 3. recreate the bronze + silver tables
 spark-sql \
@@ -248,6 +364,15 @@ spark-sql \
   --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
   --conf spark.sql.defaultCatalog=iceberg \
   -f iceberg/schemas/silver-schema.sql
+
+spark-sql \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+  --conf spark.sql.catalog.iceberg.type=hadoop \
+  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
+  --conf spark.sql.defaultCatalog=iceberg \
+  -f iceberg/schemas/gold-schema.sql
 ```
 
-Then repeat the Poller / Backfill -> SeaTunnel -> Verify -> Compute silver indicators steps above.
+Then repeat the Poller / Backfill -> SeaTunnel -> Verify -> Compute silver
+indicators -> Build training dataset -> Train -> Evaluate -> Score steps above.

@@ -66,7 +66,7 @@ docs/             Project specification and design notes
 - [ ] NIFTY 500 poller (yfinance)
 - [ ] SeaTunnel ingestion (Kafka -> Iceberg bronze)
 - [ ] Spark Structured Streaming (technical indicators, bronze -> silver)
-- [ ] Stock scoring model (Spark MLlib)
+- [x] Stock scoring model (Spark MLlib)
 - [ ] Druid ingestion + ranked-query dashboards
 - [ ] Airflow DAGs
 - [ ] Experiments (throughput, latency, fault recovery, Iceberg, scalability, model performance)
