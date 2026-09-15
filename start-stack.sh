@@ -8,6 +8,8 @@
 
 set -uo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 LOG_DIR="$HOME/stack-logs"
 PID_DIR="$LOG_DIR/pids"
 mkdir -p "$LOG_DIR" "$PID_DIR"
@@ -17,6 +19,7 @@ mkdir -p "$LOG_DIR" "$PID_DIR"
 log()  { echo -e "\033[1;34m[start-stack]\033[0m $*"; }
 ok()   { echo -e "\033[1;32m[  ok  ]\033[0m $*"; }
 fail() { echo -e "\033[1;31m[ fail ]\033[0m $*"; }
+warn() { echo -e "\033[1;33m[ warn ]\033[0m $*"; }
 
 port_free() {
   ! ss -tln 2>/dev/null | awk '{print $4}' | grep -q ":${1}\$"
@@ -83,9 +86,13 @@ wait_for_port 8888 "Druid Router" 90 || exit 1
 # ---- 6. Airflow (standalone: webserver + scheduler + triggerer) -----------
 
 log "Starting Airflow (standalone)..."
+export AIRFLOW__CORE__DAGS_FOLDER="$REPO_ROOT/airflow/dags"
 nohup airflow standalone >> "$LOG_DIR/airflow.log" 2>&1 &
 save_pid $! airflow
 wait_for_port 8080 "Airflow webserver" 90 || exit 1
+airflow pools set screening 1 "Screening pipeline (mutual exclusion)" >/dev/null 2>&1 \
+  && ok "Airflow pool 'screening' ready" \
+  || warn "Could not create Airflow pool 'screening' (create it manually)"
 
 # ---- summary ----------------------------------------------------------
 

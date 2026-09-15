@@ -33,3 +33,7 @@ airflow/*.pid
 ml/models/*
 !ml/models/.gitkeep
 ml/evaluation/results/
+
+# Local secrets
+config/airflow.env
+runtime/
