@@ -34,7 +34,7 @@ with DAG(
     serve = BashOperator(task_id="serve", bash_command=step("serving.sh"), pool=POOL)
     wait_druid = BashOperator(
         task_id="wait_for_druid",
-        bash_command=step("wait_druid.sh") + " 240",
+        bash_command=step("wait_druid.sh", "240"),
         pool=POOL,
         execution_timeout=timedelta(minutes=10),
     )

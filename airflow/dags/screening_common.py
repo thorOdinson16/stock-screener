@@ -20,6 +20,12 @@ RUN_EXPORTS = (
 )
 
 
-def step(script: str) -> str:
-    """Build a BashOperator command that runs a pipeline step script."""
-    return RUN_EXPORTS + f"bash {REPO_ROOT}/scripts/{script}"
+def step(script: str, args: str = "") -> str:
+    """Build a BashOperator command that runs a pipeline step script.
+
+    Note: the command must NOT end in '.sh' — Airflow treats a templated string
+    with a known template extension as a template *file path*. The trailing
+    comment keeps it a plain command.
+    """
+    command = " ".join(part for part in ("bash", f"{REPO_ROOT}/scripts/{script}", args) if part)
+    return f"{RUN_EXPORTS}{command} # screening step"
