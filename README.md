@@ -48,6 +48,8 @@ seatunnel/        SeaTunnel job configs (Kafka -> HDFS/Iceberg ingestion)
 spark/            Structured Streaming jobs (technical indicators), batch jobs
 iceberg/          Table schemas, DDL, maintenance (compaction, expiry) scripts
 ml/               Feature engineering, MLlib training/evaluation, saved models
+api/              FastAPI backend serving Druid (dashboard BFF)
+frontend/         React + Vite dashboard (5 pages)
 airflow/dags/     Orchestration DAGs (polling schedule, fundamentals refresh, maintenance)
 druid/            Ingestion specs, example ranking queries
 monitoring/       Metrics/observability config
@@ -62,11 +64,24 @@ docs/             Project specification and design notes
 - [x] Orchestrated start/stop scripts
 - [x] Repo skeleton
 - [x] Project spec (pivoted to stock screening/scoring)
-- [ ] Kafka topic design + creation
-- [ ] NIFTY 500 poller (yfinance)
-- [ ] SeaTunnel ingestion (Kafka -> Iceberg bronze)
-- [ ] Spark Structured Streaming (technical indicators, bronze -> silver)
+- [x] Kafka topic design + creation
+- [x] NIFTY 500 poller (yfinance)
+- [x] SeaTunnel ingestion (Kafka -> Iceberg bronze)
+- [x] Spark technical indicators (bronze -> silver)
 - [x] Stock scoring model (Spark MLlib)
-- [ ] Druid ingestion + ranked-query dashboards
+- [x] Druid ingestion + FastAPI + React dashboard (5 pages)
+- [ ] Spark Structured Streaming (near-real-time indicators)
 - [ ] Airflow DAGs
 - [ ] Experiments (throughput, latency, fault recovery, Iceberg, scalability, model performance)
+
+## Web dashboard
+
+```bash
+./start-ui.sh   # FastAPI :8000 + Vite dashboard :5173
+./stop-ui.sh
+```
+
+Serves the Druid `screener`, `stock_scores`, `price_history` and `market_quotes`
+datasources: market overview, ranked top picks, a filterable screener, stock
+detail with price/indicator charts, and the model-evaluation report. See
+`setup.md` for the ingestion steps that populate Druid.

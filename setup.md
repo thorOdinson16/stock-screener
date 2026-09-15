@@ -324,6 +324,54 @@ spark-sql \
   -e "SELECT * FROM gold.top_picks ORDER BY label, rank LIMIT 20;"
 ```
 
+### Start the Druid serving layer
+
+Requires Druid running (started by `start-stack.sh`). Registers the Kafka
+ingestion supervisors, then publishes a latest snapshot and the price history:
+
+```bash
+# 1. create the serving topics (idempotent; includes market.screener/history)
+./kafka/topics/create-topics.sh
+
+# 2. register the Druid Kafka supervisors
+./druid/ingestion/submit.sh
+
+# 3. publish the latest per-symbol snapshot -> market.screener
+spark-submit \
+  --driver-memory 4g --master "local[8]" \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0,org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.3 \
+  spark/jobs/publish_screener.py
+
+# 4. publish daily indicator bars -> market.history (~240k rows)
+spark-submit \
+  --driver-memory 4g --master "local[8]" \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0,org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.3 \
+  spark/jobs/publish_history.py
+```
+
+Druid hands off segments within ~1-2 minutes. Verify:
+
+```bash
+curl -s http://localhost:8888/druid/coordinator/v1/datasources
+# -> ["price_history","screener","stock_scores"]  (market_quotes joins after the poller runs)
+```
+
+`market_quotes` ingests the `market.quotes` topic, which has 1-day Kafka retention —
+run `poller/poller.py --once` to repopulate it. The dashboard does not depend on it.
+
+### Web dashboard
+
+```bash
+./start-ui.sh
+```
+
+- Dashboard  http://localhost:5173
+- API docs   http://localhost:8000/docs
+
+Pages: market overview, top picks, screener, stock detail, model evaluation.
+Manual refresh by default; toggle 30s auto-refresh in the sidebar. Stop with
+`./stop-ui.sh`.
+
 ### Reset and run once again
 
 Clears all Kafka topics and empties the Iceberg bronze + silver tables. Stop any running
@@ -331,7 +379,7 @@ SeaTunnel jobs first (Ctrl-C, or `for p in $(pgrep -f "SeaTunnel[C]lient"); do k
 
 ```bash
 # 1. delete and recreate Kafka topics
-for t in market.quotes market.quotes.daily market.fundamentals market.scores market.deadletter; do
+for t in market.quotes market.quotes.daily market.fundamentals market.scores market.screener market.history market.deadletter; do
   $KAFKA_HOME/bin/kafka-topics.sh --delete --topic "$t" --bootstrap-server localhost:9092
 done
 sleep 5
