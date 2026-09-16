@@ -442,6 +442,19 @@ python3 monitoring/collect_metrics.py
 The dashboard **Ops** page reads the latest snapshot via `GET /api/ops`;
 **Collect now** triggers a fresh snapshot (`POST /api/ops/collect`).
 
+Data-quality checks (duplicates, stale quotes, robust fundamental outliers)
+write to `monitoring/quality/`:
+
+```bash
+python3 monitoring/data_quality.py
+```
+
+End-to-end smoke test (opt-in; needs the stack and UI up):
+
+```bash
+RUN_E2E=1 python tests/test_pipeline_e2e.py --limit 10
+```
+
 ### Benchmarks
 
 Reproducible experiments under `benchmarks/` (each records the git commit and

@@ -1,4 +1,4 @@
-# Real-Time Stock Screening & Scoring Platform
+# On-Demand Stock Screening & Scoring Platform
 
 Distributed platform that screens the NIFTY 500 universe: `yfinance` poller -> Kafka ->
 SeaTunnel -> HDFS/Iceberg -> Spark (technical indicators) -> Spark MLlib (scoring model) ->

@@ -42,6 +42,7 @@ benchmarks/recovery/
 benchmarks/scalability/
 benchmarks/iceberg/
 monitoring/metrics/
+monitoring/quality/
 
 # Local secrets
 config/airflow.env

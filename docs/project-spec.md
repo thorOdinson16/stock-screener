@@ -1,4 +1,4 @@
-# Real-Time Stock Screening & Scoring Platform
+# On-Demand Stock Screening & Scoring Platform
 
 ## 1. Project Overview
 
