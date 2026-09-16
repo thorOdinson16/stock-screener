@@ -1,164 +1,191 @@
-### Convert start, stop, and topic scripts into executable
+# Setup & Operations
+
+Runbook for the on-demand stock screening platform.
+
+- **Section 1 — Fresh setup** (one-time): do this once on a new machine/checkout.
+- **Section 2 — Daily / on-demand runs**: the repeat workflow after setup.
+- **Reference & troubleshooting**: verification queries, benchmarks, reset, etc.
+
+This assumes all the big-data components are already **installed and configured**
+(Java, Spark, Hadoop/HDFS, Hive, Kafka, SeaTunnel, Druid, Airflow, Maven — see the
+version table in `README.md`). Service homes and endpoints are read from
+`config/pipeline.env`. The only remaining local setup is the poller's Python
+virtualenv; the API venv and dashboard `node_modules` are created automatically
+by `start-ui.sh`.
+
+---
+
+## Prerequisites (assumed installed)
+
+### One-time shell setup
 
 ```bash
-chmod +x start-stack.sh stop-stack.sh kafka/topics/create-topics.sh
+# 1. Service homes + endpoints. Edit config/pipeline.env if your install paths
+#    differ from the defaults, then source it. start-stack.sh does NOT source it.
+source config/pipeline.env
+
+# 2. Airflow REST credentials for the dashboard's "Run pipeline" button.
+cp config/airflow.env.example config/airflow.env
+#    Fill AIRFLOW_PASSWORD from ~/airflow/simple_auth_manager_passwords.json.generated
+#    (skip this if you will drive runs from scripts/run_once.sh or the Airflow UI.)
+
+# 3. Make the entrypoint scripts executable.
+chmod +x start-stack.sh stop-stack.sh kafka/topics/create-topics.sh scripts/*.sh
 ```
 
-### Start the Stack
+Internet access is needed for `yfinance` (Yahoo Finance / NSE) and for Spark to
+download its Ivy packages on first use.
+
+### Spark + Iceberg command template
+
+Define this once per shell and reuse it for every `spark-sql` command below. It
+avoids repeating the four Iceberg `--conf` lines.
+
 ```bash
+SPARK_ICEBERG=(
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0
+  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog
+  --conf spark.sql.catalog.iceberg.type=hadoop
+  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse
+  --conf spark.sql.defaultCatalog=iceberg
+  --conf spark.sql.session.timeZone=UTC
+)
+# usage: spark-sql "${SPARK_ICEBERG[@]}" -e "..."
+```
+
+---
+
+# 1. Fresh setup (one-time)
+
+## 1.1 Start the stack
+
+```bash
+source config/pipeline.env   # if not already sourced
 ./start-stack.sh
 ```
 
-Starts HDFS -> Hive Metastore -> Kafka -> SeaTunnel -> Druid -> Airflow.
-Logs: `~/stack-logs/`. Verify with `jps` and `ss -tln`.
+Starts HDFS -> Hive Metastore -> Kafka -> SeaTunnel -> Druid -> Airflow. Logs go
+to `~/stack-logs/`. `start-stack.sh` also points Airflow's `dags_folder` at this
+repo, creates the `screening` pool, and leaves the Druid supervisors suspended
+(on-demand). Verify with `jps` and `ss -tln`.
 
-### Create Kafka Topics (after the stack is up)
+- HDFS NameNode UI — http://localhost:9870
+- Hive Metastore — thrift://localhost:9083
+- Kafka broker — localhost:9092
+- SeaTunnel Zeta REST — http://localhost:5801
+- Druid console — http://localhost:8888
+- Airflow UI — http://localhost:8080
+
+## 1.2 Create Kafka topics
+
 ```bash
 ./kafka/topics/create-topics.sh
 ```
 
-Creates `market.quotes`, `market.quotes.daily`, `market.fundamentals`, `market.scores`,
-`market.deadletter`.
+Creates `market.quotes`, `market.quotes.daily`, `market.fundamentals`,
+`market.scores`, `market.screener`, `market.history`, `market.deadletter`.
 
-### Setup for Poller
+## 1.3 Create the Iceberg catalog and tables
+
+Namespaces, bronze, silver and gold/ML tables must exist before any job writes to
+them. `build_training.py` recreates `ml.training_dataset` itself if its schema
+changes; the other tables are created here once.
+
+```bash
+# Namespace (the bronze/silver/gold schema files create their own namespaces too).
+spark-sql "${SPARK_ICEBERG[@]}" -e "CREATE NAMESPACE IF NOT EXISTS bronze;"
+
+spark-sql "${SPARK_ICEBERG[@]}" -f iceberg/schemas/bronze-schema.sql
+spark-sql "${SPARK_ICEBERG[@]}" -f iceberg/schemas/silver-schema.sql
+spark-sql "${SPARK_ICEBERG[@]}" -f iceberg/schemas/gold-schema.sql
+```
+
+Creates `silver.quotes_enriched`, `silver.fundamentals_clean`,
+`gold.stock_scores`, `gold.top_picks`, `ml.training_dataset`.
+
+Verify:
+
+```bash
+spark-sql "${SPARK_ICEBERG[@]}" -e "SHOW TABLES IN bronze; SHOW TABLES IN silver; SHOW TABLES IN gold; SHOW TABLES IN ml;"
+```
+
+## 1.4 Register the Druid supervisors
+
+The platform is on-demand: supervisors are registered once and then left
+**suspended**. `start-stack.sh` re-suspends them after every restart, and each
+pipeline run resumes/drains/suspends them automatically.
+
+```bash
+./druid/ingestion/submit.sh
+scripts/druid_supervisors.sh status   # expect state=SUSPENDED for each
+```
+
+## 1.5 Set up the poller virtualenv
+
 ```bash
 cd poller
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-
-# small test first — don't hit all 500 symbols on the first run
-python poller.py --once --universe-limit 50
-# or the full universe (takes several minutes)
-python poller.py --once
 ```
 
-Publishes one snapshot per symbol to `market.quotes` and `market.fundamentals`.
-Re-run with `--once --quotes-only` to publish quotes only.
+(The API venv and dashboard `node_modules` are created automatically by
+`start-ui.sh` in step 1.10.)
 
-### Historical backfill (daily bars)
+## 1.6 Load historical data
 
-The live poller only captures the current snapshot, so load ~2 years of daily bars
-once. This is what makes `sma_200`, momentum and 52-week features meaningful.
+The live poller captures only the current snapshot, so load 5 years of daily bars
+once — this is what makes `sma_200`, momentum and 52-week features meaningful.
+The benchmark index (`^NSEI`) rides the same pipeline and is needed for
+index-relative metrics.
 
 ```bash
 cd poller && source .venv/bin/activate
-python backfill.py --once --universe-limit 20   # quick test
-python backfill.py --once                        # full universe (~4-5 min)
+
+# Quick smoke test first (20 symbols).
+python backfill.py --once --universe-limit 20
+
+# Full universe + benchmark index, 5 years (~10 min).
+python backfill.py --once --include-index --period 5y
 ```
 
-Publishes to `market.quotes.daily`. Backfills are re-runnable; the indicator job
-dedupes `(symbol, trade_date)`.
-
-### Verify Kafka
-```bash
-$KAFKA_HOME/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 \
-  --topic market.quotes --from-beginning --max-messages 5
-```
-
-Timestamps are emitted as UTC ISO-8601 with a `Z` suffix (e.g.
-`2026-09-12T12:27:35.682456Z`).
-
-### Create Hadoop Catalog (Iceberg namespace)
-```bash
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -e "CREATE NAMESPACE IF NOT EXISTS bronze;"
-```
-
-### Run Bronze Schema file
-```bash
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -f iceberg/schemas/bronze-schema.sql
-```
-
-### Run Silver Schema file
-```bash
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -f iceberg/schemas/silver-schema.sql
-```
-
-Creates `silver.quotes_enriched` and `silver.fundamentals_clean`.
-
-### Verify Iceberg tables
-```bash
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -e "SHOW TABLES IN bronze; SHOW TABLES IN silver;"
-```
-
-### Run SeaTunnel ingestion jobs
-
-These are **BATCH** jobs: each drains its Kafka topic (new records since the
-consumer group's committed offset), commits to Iceberg, then terminates on its
-own. `start_mode = group_offsets` means re-running consumes only new messages;
-`kafka.config.auto.offset.reset = earliest` covers partitions that have no
-committed offset yet (so nothing is silently skipped).
+Optionally publish one live quote snapshot as well:
 
 ```bash
-# Kafka -> Iceberg bronze (quotes)
-$SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/quotes-job.conf
-
-# Kafka -> Iceberg bronze (daily bars)
-$SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/quotes-daily-job.conf
-
-# Kafka -> Iceberg bronze (fundamentals)
-$SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/fundamentals-job.conf
+python poller.py --once --quotes-only
 ```
 
-Each job fans out: valid records go to Iceberg bronze, invalid records are routed
-to the `market.deadletter` topic. Validation rules: quotes require `symbol`,
-`close > 0`, `volume >= 0`; daily bars require `symbol`/`trade_date`/`close > 0`;
-fundamentals require `symbol`. Each job prints its result and exits. Commits are
-visible in the engine log: `~/seatunnel/logs/seatunnel-engine-server.log`
-(`do commit table`).
+Backfills are re-runnable; the indicator job dedupes `(symbol, trade_date)`.
 
-### Inspect dead-letter records
+If the NIFTY 500 bars are already ingested and you only need to add the index,
+publish just the index instead of re-sending the whole universe:
 
 ```bash
-$KAFKA_HOME/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 \
-  --topic market.deadletter --from-beginning --max-messages 10
+cd poller && source .venv/bin/activate
+$KAFKA_HOME/bin/kafka-topics.sh --delete --topic market.quotes.daily --bootstrap-server localhost:9092
+sleep 5 && ./kafka/topics/create-topics.sh
+python backfill.py --once --index-only --period 5y
 ```
 
-Each message carries the identifying fields plus `source_topic`, `reason` and
-`failed_at` (e.g. `reason: non_positive_close`).
+## 1.7 Ingest to Iceberg bronze (SeaTunnel)
 
-### Verify ingested data
+These are **BATCH** jobs: each drains its Kafka topic from the consumer group's
+committed offset, commits to Iceberg, then exits. Valid records go to bronze;
+invalid records are routed to `market.deadletter`.
+
 ```bash
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  --conf spark.sql.session.timeZone=UTC \
-  -e "SELECT COUNT(*) FROM bronze.market_quotes; SELECT * FROM bronze.market_quotes LIMIT 5;"
+$SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/quotes-daily-job.conf     # daily bars
+$SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/quotes-job.conf           # live quotes snapshot
+$SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/fundamentals-job.conf     # fundamentals
 ```
 
-### Compute silver indicators (Spark batch)
+Each job prints a result table and exits. Commits are visible in
+`~/seatunnel/logs/seatunnel-engine-server.log` (`do commit table`).
 
-Reads `bronze.quotes_daily`, computes the technical indicators from
-`docs/project-spec.md` §6.3, and overwrites `silver.quotes_enriched` +
+## 1.8 Compute silver indicators
+
+Reads `bronze.quotes_daily`, computes the technical indicators
+(`docs/project-spec.md` §6.3), and overwrites `silver.quotes_enriched` +
 `silver.fundamentals_clean`.
 
 ```bash
@@ -167,44 +194,195 @@ spark-submit \
   spark/jobs/compute_indicators.py
 ```
 
-Unit-test the indicator math (no Spark needed):
+## 1.9 Train and select the model
+
+Rebuilds the training dataset, trains all models, evaluates them, and writes
+`ml/models/selected.json` (required by `preflight` before any run). See
+`docs/project-status.md` for the current model outcome.
 
 ```bash
+# Build the training dataset (features, excess-return labels, benchmarks, split).
+spark-submit --driver-memory 4g --master "local[8]" \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  spark/jobs/build_training.py
+
+# Train all candidate models.
+spark-submit --driver-memory 6g --master "local[8]" \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  ml/training/train_model.py
+
+# Evaluate, select, and record the run (walk-forward + cost-aware backtest).
+spark-submit --driver-memory 4g --master "local[8]" \
+  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  ml/evaluation/evaluate.py
+```
+
+Or simply run all three: `scripts/retrain.sh`.
+
+Artifacts: `ml/models/<algo>_<label>_<timestamp>/`, `ml/models/registry.json`,
+`ml/models/selected.json`, `ml/evaluation/results/comparison.{json,md}`, and a
+record under `ml/experiments/`.
+
+## 1.10 Configure Airflow and start the UI
+
+```bash
+# Already done in Prerequisites: config/airflow.env holds the REST credentials.
+./start-ui.sh
+```
+
+- Dashboard — http://localhost:5173
+- API docs — http://localhost:8000/docs
+
+Stop with `./stop-ui.sh`. To avoid the launcher holding your terminal, run it
+detached: `setsid ./start-ui.sh >/tmp/ui.log 2>&1 < /dev/null &`.
+
+## 1.11 First pipeline run
+
+From the dashboard, press **Run pipeline** (Quick or Full, optional universe
+limit). Or without the UI:
+
+```bash
+scripts/run_once.sh --full --history   # or: scripts/run_once.sh --limit 20
+```
+
+Or trigger `screening_on_demand` in the Airflow UI (http://localhost:8080).
+
+## 1.12 Verify the fresh setup
+
+```bash
+# Kafka has messages
+$KAFKA_HOME/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic market.quotes --from-beginning --max-messages 5
+
+# Bronze has rows
+spark-sql "${SPARK_ICEBERG[@]}" -e "SELECT COUNT(*) FROM bronze.market_quotes; SELECT * FROM bronze.market_quotes LIMIT 5;"
+
+# Silver rows + warm-up null counts (see "Verify silver" in the Reference)
+spark-sql "${SPARK_ICEBERG[@]}" -e "SELECT COUNT(*) AS rows, COUNT(DISTINCT symbol) AS symbols FROM silver.quotes_enriched;"
+
+# Unit tests (no Spark needed)
 python tests/test_indicators.py
+python tests/test_features.py
 ```
 
-### Verify silver indicators
+For the full bronze/silver/Iceberg verification queries, see
+**Reference & troubleshooting** below.
 
-Counts + warm-up sanity — expect one row per `(symbol, trade_date)`, and null
-counts equal to symbols x warm-up (`sma_200` ≈ symbols x 199, `rsi_14` ≈ symbols x 14):
+---
+
+# 2. Daily / on-demand runs
+
+## 2.1 Start the stack
 
 ```bash
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  --conf spark.sql.session.timeZone=UTC \
+source config/pipeline.env
+./start-stack.sh
+```
+
+Druid supervisors come up **suspended** — nothing ingests until a run.
+
+## 2.2 Run the pipeline
+
+Three equivalent ways:
+
+- **Dashboard**: press **Run pipeline** (Quick = quotes only, or Full = quotes +
+  fundamentals; optional universe limit and price-history publish).
+- **CLI**: `scripts/run_once.sh [--full] [--history] [--limit N]`.
+- **Airflow UI**: trigger `screening_on_demand`.
+
+Stages (each a `scripts/` wrapper run as an Airflow task):
+
+1. `preflight` — services up and a model is selected
+2. `druid_resume` — resume the suspended Druid supervisors
+3. `poll` — fetch quotes (and fundamentals on Full runs)
+4. `ingest` — SeaTunnel drains Kafka into Iceberg bronze
+5. `indicators` — Spark computes indicators into silver
+6. `score` — Spark MLlib scores/ranks the latest cross-section into gold
+7. `serve` — publish the snapshot (history is published incrementally)
+8. `wait_for_druid` — block until Druid serves the fresh snapshot
+9. `druid_wait` / `druid_suspend` — drain, then suspend the supervisors
+10. `collect_metrics` — snapshot operational metrics
+
+## 2.3 Retrain the model
+
+Do this periodically (e.g. after a backfill or a few weeks of new data):
+
+```bash
+scripts/retrain.sh
+```
+
+Or press **Retrain model** in the dashboard.
+
+## 2.4 Start / stop the UI
+
+```bash
+./start-ui.sh
+./stop-ui.sh
+```
+
+## 2.5 Post-run checks
+
+```bash
+# API health + datasource row counts
+curl -s http://localhost:8000/api/health | python3 -m json.tool
+
+# Druid is serving a fresh screener snapshot
+scripts/druid_supervisors.sh status      # all SUSPENDED, lag 0
+```
+
+## 2.6 Routine upkeep
+
+```bash
+# Iceberg compaction / manifest rewrite / snapshot expiry
+scripts/maintenance.sh                    # SNAPSHOT_RETENTION_DAYS=30 ...
+# Operational metrics snapshot (also runs as the DAG's last task)
+python3 monitoring/collect_metrics.py
+# Data-quality checks (duplicates, stale quotes, fundamental outliers)
+python3 monitoring/data_quality.py
+```
+
+See **Reference & troubleshooting** for benchmarks and the destructive reset.
+
+---
+
+# Reference & troubleshooting
+
+## Service URLs and logs
+
+| Service | URL | Log |
+|---|---|---|
+| HDFS NameNode | http://localhost:9870 | `~/stack-logs/hdfs.log` |
+| Hive Metastore | thrift://localhost:9083 | `~/stack-logs/hive-metastore.log` |
+| Kafka | localhost:9092 | `~/stack-logs/kafka.log` |
+| SeaTunnel Zeta | http://localhost:5801 | `~/stack-logs/seatunnel.log` |
+| Druid | http://localhost:8888 | `~/stack-logs/druid.log` |
+| Airflow | http://localhost:8080 | `~/stack-logs/airflow.log` |
+| Dashboard / API | :5173 / :8000 | `~/stack-logs/ui-*.log` |
+
+## Verify bronze, silver and Iceberg
+
+Bronze rows:
+
+```bash
+spark-sql "${SPARK_ICEBERG[@]}" \
+  -e "SELECT COUNT(*) FROM bronze.market_quotes; SELECT * FROM bronze.market_quotes LIMIT 5;"
+```
+
+Silver counts + warm-up sanity — expect one row per `(symbol, trade_date)`, and
+null counts roughly symbols x warm-up (`sma_200` ≈ symbols x 199,
+`rsi_14` ≈ symbols x 14):
+
+```bash
+spark-sql "${SPARK_ICEBERG[@]}" \
   -e "SELECT COUNT(*) AS rows, COUNT(DISTINCT symbol) AS symbols, SUM(CASE WHEN sma_200 IS NULL THEN 1 ELSE 0 END) AS null_sma200, SUM(CASE WHEN rsi_14 IS NULL THEN 1 ELSE 0 END) AS null_rsi FROM silver.quotes_enriched;"
-```
 
-Sample values + fundamentals count:
-
-```bash
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  --conf spark.sql.session.timeZone=UTC \
+spark-sql "${SPARK_ICEBERG[@]}" \
   -e "SELECT COUNT(*) AS fund_rows FROM silver.fundamentals_clean; SELECT symbol, trade_date, close, sma_20, sma_50, sma_200, ema_12, rsi_14, macd, volatility_20d, volume_ratio, price_momentum_1m FROM silver.quotes_enriched WHERE symbol='RELIANCE.NS' ORDER BY trade_date DESC LIMIT 5;"
 ```
 
-Cross-check one symbol against an independent yfinance + pandas recompute. Values
-should match to ~4 decimal places; small differences are only because bronze stores
-prices as `DECIMAL(18,2)`:
+Cross-check one symbol against an independent yfinance + pandas recompute (values
+should match to ~4 decimals; small differences are because bronze stores prices as
+`DECIMAL(18,2)`):
 
 ```bash
 cd poller && .venv/bin/python -c "
@@ -217,7 +395,7 @@ pdf = df.rename(columns={'Date': 'trade_date', 'Close': 'close', 'Volume': 'volu
 pdf['symbol'] = 'RELIANCE.NS'
 out = compute_features(pdf[['symbol', 'trade_date', 'close', 'volume']])
 out['d'] = pd.to_datetime(out['trade_date']).dt.strftime('%Y-%m-%d')
-r = out[out['d'] == '2026-09-11'].iloc[0]
+r = out.iloc[-1]
 print('close', round(r['close'], 2), 'sma_20', round(r['sma_20'], 4),
       'sma_50', round(r['sma_50'], 4), 'sma_200', round(r['sma_200'], 4))
 print('ema_12', round(r['ema_12'], 4), 'rsi_14', round(r['rsi_14'], 4),
@@ -225,257 +403,39 @@ print('ema_12', round(r['ema_12'], 4), 'rsi_14', round(r['rsi_14'], 4),
 "
 ```
 
-### Backfill the benchmark index (optional but needed for index-relative metrics)
-
-The evaluation layer benchmarks top-K picks against the cross-sectional universe
-mean **and** the NIFTY index. The index rides the same daily pipeline but is
-excluded from the tradable universe, training and scoring:
+## Dead-letter inspection
 
 ```bash
-cd poller && source .venv/bin/activate
-python backfill.py --once --include-index --period 2y
+$KAFKA_HOME/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic market.deadletter --from-beginning --max-messages 10
 ```
 
-This publishes `^NSEI` daily bars to `market.quotes.daily`; re-run the
-`quotes-daily` SeaTunnel job (and the indicator job) so the index reaches silver.
+Each message carries `source_topic`, `reason` and `failed_at` (e.g.
+`reason: non_positive_close`).
 
-If the NIFTY 500 daily bars are already ingested, add the index without
-re-publishing the whole universe: clear the topic, publish only the index, ingest,
-then recompute indicators:
-
-```bash
-$KAFKA_HOME/bin/kafka-topics.sh --delete --topic market.quotes.daily --bootstrap-server localhost:9092
-sleep 5 && ./kafka/topics/create-topics.sh
-python backfill.py --once --index-only --period 2y
-$SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/quotes-daily-job.conf
-```
-
-### Create gold + ML tables
-
-```bash
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -f iceberg/schemas/gold-schema.sql
-```
-
-Creates `gold.stock_scores`, `gold.top_picks`, `ml.training_dataset`.
-
-### Unit-test the feature/label/metric math
-
-```bash
-python tests/test_features.py
-```
-
-### Build the training dataset
-
-Applies the shared scale-free/cross-sectional transforms
-(`ml/feature_engineering/transform.py`, used identically at scoring time), adds
-`industry`, the raw forward-return labels, the excess-return training labels
-(`excess_ret_*`), the two benchmark returns, and the leakage-safe
-train/embargo/test split:
-
-```bash
-spark-submit \
-  --driver-memory 4g --master "local[8]" \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  spark/jobs/build_training.py
-```
-
-Expect roughly one row per `(symbol, trade_date)` for non-index symbols; the last
-5/21 bars per symbol have null labels and the split is `train`/`embargo`/`test`.
-`build_training.py` recreates `ml.training_dataset` automatically if its schema
-changed (it is a fully derived table).
-
-### Train models
-
-Trains GBT, RandomForest and LinearRegression for each **excess-return** label
-(`excess_ret_5d`, `excess_ret_21d`) on the `train` split only, plus rank-label
-`gbt_rank`/`rf_rank` models (a learning-to-rank approximation, blended by the
-evaluator into `rank_ensemble`). Each algorithm is tuned on a time-ordered
-validation slice (with an embargo) and feature importances/coefficients are
-recorded. Tree training needs a larger driver heap and bounded task parallelism
-when running in local mode, hence the flags below:
-
-```bash
-spark-submit \
-  --driver-memory 6g --master "local[8]" \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  ml/training/train_model.py
-```
-
-Artifacts go to `ml/models/<algo>_<label>_<timestamp>/`, indexed by
-`ml/models/registry.json`.
-
-### Evaluate + select the best model per label
-
-Scores every model and the interpretable rule baseline (spec §13) on the `test`
-split, reporting Information Coefficient with a Newey–West t-stat, a
-sector-neutral IC view, Precision@K (vs both benchmarks), and a non-overlapping
-long/short backtest net of 10 bps/side. The selected model is chosen by net
-Sharpe, a walk-forward check is run for it (`--purged-kfold` adds a purged
-K-fold check), and a deflated Sharpe corrects for the number of trials:
-
-```bash
-spark-submit \
-  --driver-memory 4g --master "local[8]" \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  ml/evaluation/evaluate.py
-```
-
-Writes `ml/evaluation/results/comparison.{json,md}`, `ml/models/selected.json`,
-and a reproducible run record under `ml/experiments/`. A robustness section
-restricts the selected model to symbols present on ≥90% of trading dates
-(`--coverage-threshold`). Point-in-time fundamentals
-(`ml/feature_engineering/asof.py`) are implemented but only wired into training
-once fundamentals history has accrued.
-
-### Score the universe -> gold + Kafka
-
-```bash
-spark-submit \
-  --driver-memory 4g --master "local[8]" \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0,org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.3 \
-  spark/jobs/score_stocks.py
-```
-
-Ranks the latest cross-section, writes `gold.stock_scores` + `gold.top_picks` for
-the latest trade date (idempotent — re-runs replace that date), and publishes to
-`market.scores`. If the Kafka connector isn't on the classpath the gold writes
-still succeed and publishing is skipped with a warning. Verify:
-
-```bash
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -e "SELECT * FROM gold.top_picks ORDER BY label, rank LIMIT 20;"
-```
-
-### Druid serving layer (on-demand)
-
-Requires Druid running (started by `start-stack.sh`). Druid ingests the serving
-topics through Kafka supervisors that are **kept suspended at rest** — nothing
-ingests continuously. The pipeline resumes them per run, waits until they drain,
-then suspends them again.
-
-```bash
-# register the supervisors once (leaves them suspended)
-./kafka/topics/create-topics.sh
-./druid/ingestion/submit.sh
-
-# inspect / control them by hand if needed
-scripts/druid_supervisors.sh status
-scripts/druid_supervisors.sh resume
-scripts/druid_supervisors.sh wait
-scripts/druid_supervisors.sh suspend
-```
-
-The on-demand pipeline handles resume/wait/suspend automatically
-(`scripts/run_once.sh`, DAG `screening_on_demand`). `serving.sh` publishes the
-latest snapshot to `market.screener` and, with `PUBLISH_HISTORY=1`, publishes
-only the daily bars newer than Druid's current max (incremental).
-
-Druid hands off segments within ~1-2 minutes. Verify:
-
-```bash
-curl -s http://localhost:8888/druid/coordinator/v1/datasources
-# -> ["price_history","screener","stock_scores"]  (market_quotes joins after the poller runs)
-```
-
-`market_quotes` ingests the `market.quotes` topic, which has 1-day Kafka retention —
-run `poller/poller.py --once` to repopulate it. The dashboard does not depend on it.
-
-### Web dashboard
-
-```bash
-./start-ui.sh
-```
-
-- Dashboard  http://localhost:5173
-- API docs   http://localhost:8000/docs
-
-Pages: market overview, top picks, screener, stock detail, model evaluation
-(IC / Newey–West t-stat / net-of-cost Sharpe), and Ops. Data refreshes only when
-you run the pipeline and click **Refresh data** in the sidebar. Stop with
-`./stop-ui.sh`.
-
-### On-demand pipeline (button / Airflow)
-
-The Dashboard header's **Run pipeline** button (Quick or Full, with an optional
-universe limit and price-history publish) and the **Retrain model** action trigger
-Airflow DAGs, which run the `scripts/` wrappers step by step.
-
-Configure the Airflow REST credentials once:
-
-```bash
-cp config/airflow.env.example config/airflow.env
-# fill AIRFLOW_PASSWORD from ~/airflow/simple_auth_manager_passwords.json.generated
-```
-
-`start-stack.sh` points Airflow's `dags_folder` at this repo's `airflow/dags/`
-and creates the `screening` pool (1 slot) so runs never overlap. The DAGs
-(`screening_on_demand`, `screening_retrain`) can also be triggered from the
-Airflow UI at http://localhost:8080.
-
-Run a pipeline without the UI (debugging):
-
-```bash
-scripts/run_once.sh --full --history       # or: scripts/run_once.sh --limit 20
-```
-
-### Observability
-
-Snapshots Kafka consumer lag, Druid segments/latency, HDFS capacity and the
-latest Airflow run state to `monitoring/metrics/`. The on-demand DAG runs it
-after each successful pipeline (`collect_metrics`), or run it directly:
-
-```bash
-python3 monitoring/collect_metrics.py
-```
-
-The dashboard **Ops** page reads the latest snapshot via `GET /api/ops`;
-**Collect now** triggers a fresh snapshot (`POST /api/ops/collect`).
-
-Data-quality checks (duplicates, stale quotes, robust fundamental outliers)
-write to `monitoring/quality/`:
-
-```bash
-python3 monitoring/data_quality.py
-```
-
-End-to-end smoke test (opt-in; needs the stack and UI up):
-
-```bash
-RUN_E2E=1 python tests/test_pipeline_e2e.py --limit 10
-```
-
-### Benchmarks
+## Benchmarks
 
 Reproducible experiments under `benchmarks/` (each records the git commit and
-config, and writes JSON + a markdown summary):
+config, and writes JSON + a markdown summary). See `docs/project-status.md` for
+which were run.
 
 ```bash
-python benchmarks/throughput.py --sizes 50 200 500   # exp 1
-python benchmarks/latency.py --repeat 3               # exp 2
-python benchmarks/model.py --run                      # exp 3 (Phase 1 stack)
+python benchmarks/throughput.py --sizes 50 200 500        # exp 1
+python benchmarks/latency.py --repeat 3                   # exp 2
+python benchmarks/model.py --run                          # exp 3
 python benchmarks/recovery.py --component kafka \
-    --kill-cmd "..." --start-cmd "..."                # exp 4
+    --kill-cmd "..." --start-cmd "..."                    # exp 4
 spark-submit --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-    benchmarks/iceberg.py                              # exp 5
-python benchmarks/scalability.py --masters "local[4]" "local[8]" --limit 100  # exp 6
+    benchmarks/iceberg.py                                 # exp 5
+python benchmarks/scalability.py --masters "local[4]" "local[8]" --limit 100   # exp 6
 ```
 
-### Iceberg maintenance
+## Iceberg maintenance
 
-Compacts small files, rewrites manifests and expires snapshots older than 7
-days (configurable). Trigger it from the dashboard **Maintenance** button, the
-Airflow DAG `screening_maintenance`, or directly:
+Compacts small files, rewrites manifests and expires snapshots older than 7 days
+(configurable). Trigger from the dashboard **Maintenance** action, the Airflow DAG
+`screening_maintenance`, or directly:
 
 ```bash
 scripts/maintenance.sh
@@ -486,10 +446,25 @@ DRY_RUN=1 scripts/maintenance.sh
 See `iceberg/maintenance/README.md` for the procedure reference and time-travel /
 schema-evolution example queries.
 
-### Reset and run once again
+## Unit tests
 
-Clears all Kafka topics and empties the Iceberg bronze + silver tables. Stop any running
-SeaTunnel jobs first (Ctrl-C, or `for p in $(pgrep -f "SeaTunnel[C]lient"); do kill "$p"; done`).
+```bash
+python tests/test_indicators.py
+python tests/test_features.py
+python tests/test_benchmarks.py
+python tests/test_monitoring.py
+python tests/test_data_quality.py
+python tests/test_supervisors.py
+
+# End-to-end smoke test (opt-in; requires the stack + UI up)
+RUN_E2E=1 python tests/test_pipeline_e2e.py --limit 10
+```
+
+## Full reset (destructive)
+
+Starts over. Clears Kafka topics and the Iceberg warehouse, recreates the tables,
+then redo **Section 1** (data load through training). Stop any running SeaTunnel
+jobs first (`for p in $(pgrep -f "SeaTunnel[C]lient"); do kill "$p"; done`).
 
 ```bash
 # 1. delete and recreate Kafka topics, and reset the SeaTunnel consumer groups
@@ -506,41 +481,14 @@ for g in seatunnel-bronze-quotes seatunnel-bronze-quotes-daily seatunnel-bronze-
 done
 
 # 2. drop Iceberg tables and remove their warehouse data
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -e "DROP TABLE IF EXISTS bronze.market_quotes; DROP TABLE IF EXISTS bronze.quotes_daily; DROP TABLE IF EXISTS bronze.market_fundamentals; DROP TABLE IF EXISTS silver.quotes_enriched; DROP TABLE IF EXISTS silver.fundamentals_clean; DROP TABLE IF EXISTS ml.training_dataset; DROP TABLE IF EXISTS gold.stock_scores; DROP TABLE IF EXISTS gold.top_picks;"
+spark-sql "${SPARK_ICEBERG[@]}" -e "DROP TABLE IF EXISTS bronze.market_quotes; DROP TABLE IF EXISTS bronze.quotes_daily; DROP TABLE IF EXISTS bronze.market_fundamentals; DROP TABLE IF EXISTS silver.quotes_enriched; DROP TABLE IF EXISTS silver.fundamentals_clean; DROP TABLE IF EXISTS ml.training_dataset; DROP TABLE IF EXISTS gold.stock_scores; DROP TABLE IF EXISTS gold.top_picks;"
 
 hdfs dfs -rm -r -f /warehouse/bronze/market_quotes /warehouse/bronze/quotes_daily /warehouse/bronze/market_fundamentals /warehouse/silver /warehouse/ml /warehouse/gold
 
-# 3. recreate the bronze + silver tables
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -f iceberg/schemas/bronze-schema.sql
-
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -f iceberg/schemas/silver-schema.sql
-
-spark-sql \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
-  --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-  --conf spark.sql.catalog.iceberg.type=hadoop \
-  --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse \
-  --conf spark.sql.defaultCatalog=iceberg \
-  -f iceberg/schemas/gold-schema.sql
+# 3. recreate the Iceberg tables
+spark-sql "${SPARK_ICEBERG[@]}" -f iceberg/schemas/bronze-schema.sql
+spark-sql "${SPARK_ICEBERG[@]}" -f iceberg/schemas/silver-schema.sql
+spark-sql "${SPARK_ICEBERG[@]}" -f iceberg/schemas/gold-schema.sql
 ```
 
-Then repeat the Poller / Backfill -> SeaTunnel -> Verify -> Compute silver
-indicators -> Build training dataset -> Train -> Evaluate -> Score steps above.
+Then repeat **Section 1**, starting at 1.6 (Load historical data).
