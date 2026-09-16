@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useSettings } from "../settings";
+import { useQueryClient } from "@tanstack/react-query";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: "▦" },
@@ -10,7 +10,7 @@ const NAV = [
 ];
 
 export default function Layout() {
-  const { autoRefresh, setAutoRefresh } = useSettings();
+  const queryClient = useQueryClient();
 
   return (
     <div className="app">
@@ -36,15 +36,10 @@ export default function Layout() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-            />
-            <span>Auto-refresh 30s</span>
-          </label>
-          <p className="muted">Manual by default. Toggle to poll live.</p>
+          <button className="btn" onClick={() => queryClient.invalidateQueries()}>
+            Refresh data
+          </button>
+          <p className="muted">On-demand: data updates when you run the pipeline, then refresh.</p>
         </div>
       </aside>
       <main className="content">

@@ -1,15 +1,13 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./api";
-import { useRefetchInterval } from "./settings";
 import type { OpsSnapshot, PipelineRun, RunOptions } from "./types";
 
+// Manual refresh only (on-demand platform): no background polling of data.
 export function useApi<T>(key: unknown[], path: string, enabled = true) {
-  const refetchInterval = useRefetchInterval();
   return useQuery<T>({
     queryKey: key,
     queryFn: () => apiGet<T>(path),
     enabled,
-    refetchInterval,
     staleTime: 15000,
   });
 }
