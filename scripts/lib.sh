@@ -3,7 +3,7 @@
 # lib.sh — shared helpers for the on-demand pipeline step scripts.
 # Sources config/pipeline.env (service homes, Spark packages, defaults).
 
-set -uo pipefail
+set -euo pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPTS_DIR/.." && pwd)"

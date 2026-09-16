@@ -20,7 +20,7 @@ try:
     t=json.load(sys.stdin)[0]["t"]
     print((t or "")[:10])
 except Exception:
-    print("")' 2>/dev/null)
+    print("")' 2>/dev/null || true)
   log "Publishing price history (since: ${since:-beginning})"
   history_args=(--bootstrap-servers "$KAFKA_BOOTSTRAP")
   [ -n "$since" ] && history_args+=(--since "$since")
