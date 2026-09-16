@@ -195,13 +195,10 @@ def test_derived_features_are_scale_free():
         ), f"{col} depends on price scale"
 
 
-def test_regime_features_present_and_interact():
+def test_transform_output_columns_match_model_features():
     out = transform_group(_feature_panel(symbols=("A", "B", "C"), periods=1))
-    for col in ("market_breadth", "market_volatility", "momentum_x_breadth",
-                "volatility_x_market"):
-        assert col in out.columns
-    # market breadth is constant within the date -> normalizes to zero
-    assert np.allclose(out["market_breadth"].values, 0.0)
+    assert list(out.columns) == ["symbol", "trade_date"] + MODEL_FEATURES
+    assert np.isfinite(out[MODEL_FEATURES].values).all()
 
 
 def test_cross_sectional_zscore_mean_zero():

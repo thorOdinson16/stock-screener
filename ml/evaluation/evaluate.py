@@ -29,6 +29,8 @@ import os
 import sys
 from datetime import datetime, timezone
 
+import pandas as pd
+
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import (
     GBTRegressionModel,
@@ -59,7 +61,6 @@ from backtest import DEFAULT_COST_BPS, backtest  # noqa: E402
 from walk_forward import (  # noqa: E402
     expanding_folds,
     purged_kfold_folds,
-    run_folds,
 )
 from rules import rule_score  # noqa: E402
 from registry import record as record_experiment  # noqa: E402
@@ -305,11 +306,10 @@ def fold_metrics(dataset, label, members, k, cost_bps, mode="walk_forward", n_tr
             pcols = []
             for m in members:
                 target = rank_col if m.get("kind") == "rank" else label
-                model = estimator(m["algo"], dict(m.get("params") or {})).fit(
-                    assembler.transform(
-                        train.select(*MODEL_FEATURES, F.col(target).alias("label"))
-                    )
-                )
+                train_prepared = assembler.transform(
+                    train.select(*MODEL_FEATURES, F.col(target).alias("label"))
+                ).filter(F.col("label").isNotNull())
+                model = estimator(m["algo"], dict(m.get("params") or {})).fit(train_prepared)
                 alias = f"pred_{m['algo']}"
                 prediction = model.transform(
                     assembler.transform(test.select(*MODEL_FEATURES, "symbol", "trade_date"))
@@ -330,9 +330,23 @@ def fold_metrics(dataset, label, members, k, cost_bps, mode="walk_forward", n_tr
             if mode == "purged_kfold"
             else expanding_folds(dates)
         )
-        wf = run_folds(dates, fit_predict, folds)
-        if wf.empty:
+        frames, per_fold = [], []
+        for i, fold in enumerate(folds):
+            pdf = fit_predict(fold["train_dates"], fold["test_dates"])
+            if pdf is None or pdf.empty:
+                continue
+            frames.append(pdf)
+            fold_ic = information_coefficient(pdf, "score", label, lags=horizon - 1)
+            per_fold.append({
+                "fold": i,
+                "n": int(len(pdf)),
+                "ic_mean": fold_ic["ic_mean"],
+                "ic_t_stat": fold_ic["ic_t_stat"],
+            })
+        if not frames:
             return {"mode": mode, "n_periods": 0}
+
+        wf = pd.concat(frames, ignore_index=True)
         ic = information_coefficient(wf, "score", label, lags=horizon - 1)
         bt = backtest(
             wf, horizon, k=k, cost_bps=cost_bps, long_short=True,
@@ -340,14 +354,26 @@ def fold_metrics(dataset, label, members, k, cost_bps, mode="walk_forward", n_tr
             universe_ret_col=universe_col, index_ret_col=index_col,
             n_trials=n_trials,
         )
+        fold_ics = [
+            f["ic_mean"] for f in per_fold
+            if f["ic_mean"] is not None and not math.isnan(f["ic_mean"])
+        ]
         return {
             "mode": mode,
             "n_periods": int(len(wf)),
+            "n_folds": len(per_fold),
             "ic_mean": ic["ic_mean"],
             "ic_t_stat": ic["ic_t_stat"],
             "ic_p_value": ic["ic_p_value"],
             "net_sharpe": bt.get("net_sharpe"),
             "net_annualized_return": bt.get("net_annualized_return"),
+            "per_fold": per_fold,
+            "fold_ic_mean": (sum(fold_ics) / len(fold_ics)) if fold_ics else None,
+            "fold_ic_min": min(fold_ics) if fold_ics else None,
+            "fold_ic_max": max(fold_ics) if fold_ics else None,
+            "folds_positive": (
+                sum(1 for v in fold_ics if v > 0) / len(fold_ics)
+            ) if fold_ics else None,
         }
     except Exception as e:  # noqa: BLE001 — fold evaluation is best-effort
         print(f"{mode} for {label} skipped: {e}")
@@ -571,8 +597,11 @@ def _write_markdown(results, path):
                     lines.append(f"{title} (selected model): skipped ({fold['error']}).")
                 else:
                     lines.append(
-                        f"{title} (selected model): {fold.get('n_periods', 0)} periods, "
-                        f"IC {_fmt(fold.get('ic_mean'))} (t={_fmt(fold.get('ic_t_stat'))}), "
+                        f"{title} (selected model): {fold.get('n_folds', 0)} folds, "
+                        f"pooled IC {_fmt(fold.get('ic_mean'))} (t={_fmt(fold.get('ic_t_stat'))}), "
+                        f"fold IC mean/min/max {_fmt(fold.get('fold_ic_mean'))}/"
+                        f"{_fmt(fold.get('fold_ic_min'))}/{_fmt(fold.get('fold_ic_max'))}, "
+                        f"folds positive {_fmt(fold.get('folds_positive'))}, "
                         f"net Sharpe {_fmt(fold.get('net_sharpe'))}."
                     )
         lines.append("")

@@ -70,24 +70,27 @@ _PASSTHROUGH_FEATURES = [
     "price_momentum_6m",
 ]
 
-# Market-regime context (computed per trade date across the held cross-section)
-# plus interaction terms. The constant market levels normalize to zero
-# cross-sectionally; the interactions let the model condition symbol-level
-# signals on the regime.
-REGIME_FEATURES = [
-    "market_breadth",
-    "market_volatility",
-    "momentum_x_breadth",
-    "volatility_x_market",
+# Config 1 (kept): no feature pruning and no regime features. Config 2 (raw
+# market-state features) and config 3 (importance-based pruning) both reduced the
+# 21d walk-forward IC and were reverted; see ml/experiments/.
+_PRUNED_FEATURES: set = set()
+
+# Symbol features that are cross-sectionally normalized per trade date.
+NORMALIZED_FEATURES = [
+    f for f in (list(_RATIO_RECIPES) + list(_MACD_RECIPES) + _PASSTHROUGH_FEATURES)
+    if f not in _PRUNED_FEATURES
 ]
 
-# Derived, scale-free model inputs (order is stable — it is written into schemas).
-MODEL_FEATURES = (
-    list(_RATIO_RECIPES)
-    + list(_MACD_RECIPES)
-    + _PASSTHROUGH_FEATURES
-    + REGIME_FEATURES
-)
+# Market-regime context, computed per trade date across the cross-section. These
+# are deliberately NOT cross-sectionally normalized: they are constant within a
+# date, so a within-date z-score would zero them. Left at their (time-varying)
+# level, tree models can split on regime across dates and learn regime-specific
+# symbol relationships — genuine conditioning rather than a rescaled copy.
+# Config 3: empty (config 2's raw market-state features hurt the 21d walk-forward).
+REGIME_FEATURES = []
+
+# Derived model inputs (order is stable — it is written into schemas).
+MODEL_FEATURES = NORMALIZED_FEATURES + REGIME_FEATURES
 
 # Cross-sectional normalization defaults.
 NORMALIZATION_METHOD = "zscore"  # "zscore" | "rank"
@@ -106,16 +109,14 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_regime_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Adds per-trade-date market regime features and their interactions with
-    symbol-level signals. Must be called on a single date's cross-section (the
-    Spark jobs group by trade_date)."""
+    """Adds per-trade-date market-state features (constant within the date).
+    Must be called on a single date's cross-section (the Spark jobs group by
+    trade_date). These are not cross-sectionally normalized (see REGIME_FEATURES)."""
     out = df.copy()
-    breadth = float((out["close"] > out["sma_50"]).mean())
-    market_vol = float(out["volatility_20d"].mean())
-    out["market_breadth"] = breadth
-    out["market_volatility"] = market_vol
-    out["momentum_x_breadth"] = out["price_momentum_1m"] * breadth
-    out["volatility_x_market"] = out["volatility_20d"] * market_vol
+    out["market_breadth"] = float((out["close"] > out["sma_50"]).mean())
+    out["market_volatility"] = float(out["volatility_20d"].mean())
+    out["market_momentum_1m"] = float(out["price_momentum_1m"].mean())
+    out["market_momentum_3m"] = float(out["price_momentum_3m"].mean())
     return out
 
 
@@ -172,8 +173,9 @@ def apply_cross_sectional(
 
 def transform_group(pdf: pd.DataFrame) -> pd.DataFrame:
     """Single-argument Spark `applyInPandas` entry point (one trade date per
-    group): derive, add regime context, then cross-sectionally normalize."""
+    group): derive, add regime context (if any), then cross-sectionally
+    normalize."""
     out = add_derived_features(pdf)
     out = add_regime_features(out)
-    out = apply_cross_sectional(out, columns=MODEL_FEATURES)
+    out = apply_cross_sectional(out, columns=NORMALIZED_FEATURES)
     return out[["symbol", "trade_date"] + MODEL_FEATURES]
