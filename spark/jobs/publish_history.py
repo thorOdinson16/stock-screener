@@ -3,7 +3,8 @@ publish_history.py — publishes daily indicator bars to the `market.history` Ka
 topic for Druid ingestion (dashboard price/indicator charts).
 
 Source: silver.quotes_enriched. Benchmark index symbols are excluded so the charts
-cover the tradable universe only.
+cover the tradable universe only. On-demand runs publish incrementally via
+`--since` (bars newer than what Druid already serves).
 
 Run (from the repo root):
     spark-submit \
@@ -53,14 +54,23 @@ def main():
     parser.add_argument("--warehouse", default="hdfs://localhost:9000/warehouse")
     parser.add_argument("--bootstrap-servers", default="localhost:9092")
     parser.add_argument("--topic", default=HISTORY_TOPIC)
+    parser.add_argument(
+        "--since", default=None,
+        help="Only publish bars with trade_date > this date (incremental, on-demand)",
+    )
     args = parser.parse_args()
 
     spark = build_spark(args.warehouse)
     spark.sparkContext.setLogLevel("WARN")
 
+    source = spark.table("iceberg.silver.quotes_enriched").filter(
+        ~F.col("symbol").isin(*BENCHMARK_SYMBOLS)
+    )
+    if args.since:
+        source = source.filter(F.col("trade_date") > F.lit(args.since).cast("date"))
+
     history = (
-        spark.table("iceberg.silver.quotes_enriched")
-        .filter(~F.col("symbol").isin(*BENCHMARK_SYMBOLS))
+        source
         .select(
             "symbol",
             F.col("trade_date").cast("string").alias("trade_date"),

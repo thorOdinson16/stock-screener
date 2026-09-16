@@ -83,6 +83,13 @@ nohup "$DRUID_HOME/bin/start-single-server-small" >> "$LOG_DIR/druid.log" 2>&1 &
 save_pid $! druid
 wait_for_port 8888 "Druid Router" 90 || exit 1
 
+# The platform is on-demand: leave the Kafka supervisors suspended when idle.
+if [ -f "$REPO_ROOT/druid/ingestion/supervisors.py" ]; then
+  python3 "$REPO_ROOT/druid/ingestion/supervisors.py" suspend >/dev/null 2>&1 \
+    && ok "Druid supervisors suspended (on-demand)" \
+    || warn "Could not suspend Druid supervisors (register them with druid/ingestion/submit.sh)"
+fi
+
 # ---- 6. Airflow (standalone: webserver + scheduler + triggerer) -----------
 
 log "Starting Airflow (standalone)..."

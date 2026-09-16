@@ -18,6 +18,10 @@ for spec in "$SCRIPT_DIR"/*-kafka.json; do
 done
 
 echo
+echo "Suspending supervisors (the platform is on-demand; the pipeline resumes them per run):"
+python3 "$SCRIPT_DIR/supervisors.py" suspend --router "$DRUID_ROUTER"
+
+echo
 echo "Current supervisors:"
 curl -sS "$DRUID_ROUTER/druid/indexer/v1/supervisor"
 echo

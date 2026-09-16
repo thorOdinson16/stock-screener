@@ -357,30 +357,29 @@ spark-sql \
   -e "SELECT * FROM gold.top_picks ORDER BY label, rank LIMIT 20;"
 ```
 
-### Start the Druid serving layer
+### Druid serving layer (on-demand)
 
-Requires Druid running (started by `start-stack.sh`). Registers the Kafka
-ingestion supervisors, then publishes a latest snapshot and the price history:
+Requires Druid running (started by `start-stack.sh`). Druid ingests the serving
+topics through Kafka supervisors that are **kept suspended at rest** — nothing
+ingests continuously. The pipeline resumes them per run, waits until they drain,
+then suspends them again.
 
 ```bash
-# 1. create the serving topics (idempotent; includes market.screener/history)
+# register the supervisors once (leaves them suspended)
 ./kafka/topics/create-topics.sh
-
-# 2. register the Druid Kafka supervisors
 ./druid/ingestion/submit.sh
 
-# 3. publish the latest per-symbol snapshot -> market.screener
-spark-submit \
-  --driver-memory 4g --master "local[8]" \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0,org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.3 \
-  spark/jobs/publish_screener.py
-
-# 4. publish daily indicator bars -> market.history (~240k rows)
-spark-submit \
-  --driver-memory 4g --master "local[8]" \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0,org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.3 \
-  spark/jobs/publish_history.py
+# inspect / control them by hand if needed
+scripts/druid_supervisors.sh status
+scripts/druid_supervisors.sh resume
+scripts/druid_supervisors.sh wait
+scripts/druid_supervisors.sh suspend
 ```
+
+The on-demand pipeline handles resume/wait/suspend automatically
+(`scripts/run_once.sh`, DAG `screening_on_demand`). `serving.sh` publishes the
+latest snapshot to `market.screener` and, with `PUBLISH_HISTORY=1`, publishes
+only the daily bars newer than Druid's current max (incremental).
 
 Druid hands off segments within ~1-2 minutes. Verify:
 

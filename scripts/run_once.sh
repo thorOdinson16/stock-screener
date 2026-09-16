@@ -11,6 +11,9 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+# Always leave the Druid supervisors suspended, even if a step fails.
+trap '"$SCRIPTS_DIR/druid_supervisors.sh" suspend >/dev/null 2>&1 || true' EXIT
+
 export FULL_RUN=0
 export PUBLISH_HISTORY=0
 export UNIVERSE_LIMIT="${DEFAULT_UNIVERSE_LIMIT}"
@@ -26,11 +29,14 @@ while [ $# -gt 0 ]; do
 done
 
 "$SCRIPTS_DIR/preflight.sh"
+"$SCRIPTS_DIR/druid_supervisors.sh" resume
 "$SCRIPTS_DIR/poll.sh"
 "$SCRIPTS_DIR/ingest.sh"
 "$SCRIPTS_DIR/indicators.sh"
 "$SCRIPTS_DIR/score.sh"
 "$SCRIPTS_DIR/serving.sh"
 "$SCRIPTS_DIR/wait_druid.sh" "${WAIT_DRUID_TIMEOUT:-240}"
+"$SCRIPTS_DIR/druid_supervisors.sh" wait
+"$SCRIPTS_DIR/druid_supervisors.sh" suspend
 
 ok "Pipeline run complete"
