@@ -8,21 +8,22 @@
 
 ### 1.2 Project Summary
 
-This project designs and implements a scalable, fault-tolerant financial data platform that
-continuously ingests price and fundamentals data for the NIFTY 500 stock universe, maintains a
-historical lakehouse, computes technical and fundamental screening signals, scores stocks with a
-distributed machine-learning model, and exposes ranked "good pick" results through low-latency
-analytical queries.
+This project designs and implements a scalable, fault-tolerant financial data platform that ingests
+price and fundamentals data for the NIFTY 500 stock universe on demand, maintains a historical
+lakehouse, computes technical and fundamental screening signals, scores stocks with a distributed
+machine-learning model, and exposes ranked "good pick" results through low-latency analytical
+queries.
 
-The platform simulates a research desk continuously re-evaluating a broad stock universe rather
-than a single ticker. Price and fundamentals snapshots are pulled on a schedule from a public
+The platform simulates a research desk re-evaluating a broad stock universe on demand rather than a
+single ticker. When a run is triggered, price and fundamentals snapshots are pulled from a public
 market data source, transported through Apache Kafka, ingested and transformed using Apache
-SeaTunnel, stored on HDFS using Apache Iceberg as the lakehouse table format, processed using
-Apache Spark Structured Streaming, scored using Spark MLlib, and exposed through Apache Druid for
-fast on-demand ranking and dashboards.
+SeaTunnel, stored on HDFS using Apache Iceberg as the lakehouse table format, processed using Apache
+Spark (batch), scored using Spark MLlib, and exposed through Apache Druid for fast on-demand ranking
+and dashboards.
 
-Apache Airflow orchestrates the batch-oriented and scheduled workflows: polling cadence, daily
-fundamentals refresh, model retraining, and Iceberg maintenance.
+Apache Airflow orchestrates the on-demand pipeline (poll -> ingest -> indicators -> score -> serve)
+along with model retraining and Iceberg maintenance. Nothing runs continuously: the Druid Kafka
+supervisors are suspended at rest and resumed only for the duration of a run.
 
 The system is designed not merely as a collection of Big Data technologies, but as an integrated
 distributed system where each component has a clearly defined responsibility.
@@ -36,18 +37,18 @@ volume problem: manually screening 500 stocks against technical and fundamental 
 error-prone, and quickly stale as prices move. Most free screening tools either cover a narrow
 watchlist or refresh infrequently, and combining technical signals (momentum, volatility, moving
 averages) with fundamental signals (valuation, earnings, size) into one ranked view is rarely
-done in real time.
+available on demand.
 
 The proposed system addresses this by building a distributed platform capable of:
 
-- ingesting price and fundamentals data for a 500-stock universe on a recurring schedule;
+- ingesting price and fundamentals data for a 500-stock universe on demand;
 - performing distributed data ingestion and transformation;
 - maintaining large-scale historical price/fundamentals data;
-- computing technical indicators and fundamental ratios with low latency after each poll;
+- computing technical indicators and fundamental ratios after each run;
 - scoring and ranking stocks using a combined technical + fundamental model;
 - supporting fast, on-demand "give me today's best picks" queries over historical and recent data;
 - handling failures (API outages, malformed data) and recovering from processing interruptions;
-- measuring system performance under increasing data volume and polling frequency.
+- measuring system performance under increasing data volume.
 
 ---
 
@@ -56,15 +57,15 @@ The proposed system addresses this by building a distributed platform capable of
 ## 3.1 Primary Objectives
 
 1. Build a complete end-to-end stock screening pipeline.
-2. Implement scheduled, high-throughput-capable ingestion using Kafka.
+2. Implement high-throughput ingestion using Kafka.
 3. Use SeaTunnel for data ingestion and transformation.
 4. Store large-scale price/fundamentals data on HDFS.
 5. Use Apache Iceberg as the lakehouse table format on HDFS.
-6. Implement near-real-time processing using Spark Structured Streaming.
+6. Implement on-demand batch processing using Apache Spark.
 7. Develop a distributed stock-scoring model combining technical and fundamental signals using
    Spark MLlib.
 8. Provide low-latency, on-demand ranked-query access using Apache Druid.
-9. Use Airflow to orchestrate scheduled polling, fundamentals refresh, and maintenance workflows.
+9. Use Airflow to orchestrate the on-demand pipeline, fundamentals refresh, retraining and maintenance.
 10. Evaluate scalability, latency, throughput, fault tolerance, and model performance.
 
 ## 3.2 Secondary Objectives
@@ -74,7 +75,7 @@ The proposed system addresses this by building a distributed platform capable of
 - Support historical backfills of price history.
 - Handle duplicate or out-of-order snapshots from the polling source.
 - Demonstrate recovery from component failures.
-- Compare processing performance at different universe sizes and polling frequencies.
+- Compare processing performance at different universe sizes.
 - Provide system observability and operational metrics.
 - Maintain reproducibility of experiments.
 
@@ -157,7 +158,7 @@ The proposed system addresses this by building a distributed platform capable of
 | Distributed storage         | Apache Hadoop HDFS 3.4.1                   |
 | Lakehouse table format      | Apache Iceberg 1.11.0                      |
 | Metastore                  | Apache Hive Metastore 4.1.0                 |
-| Stream/batch processing     | Apache Spark 4.1.3 (Structured Streaming)  |
+| Batch processing            | Apache Spark 4.1.3 (batch)                 |
 | Machine learning            | Spark MLlib                                |
 | Low-latency analytics        | Apache Druid 37.0.0                        |
 | Orchestration               | Apache Airflow 3.3.1                        |
@@ -237,32 +238,31 @@ These technical features combine with the fundamentals schema (§6.2) to feed th
 
 # 7. Data Ingestion (Poller)
 
-A configurable poller replaces the "transaction generator" role from a transaction-driven design:
-since the data source is pull-based (yfinance/Yahoo Finance), there is no event stream to
-generate — instead, a scheduled job fetches the current universe on a cadence and publishes
-snapshots to Kafka.
+A poller fetches the current universe and publishes snapshots to Kafka. The platform is
+on-demand: a run triggers exactly one poll cycle, which fetches the universe once and exits —
+there is no continuous polling loop.
 
 The poller must support:
 
 - configurable stock universe (default: NIFTY 500 constituent list);
-- configurable polling interval for quotes (e.g. every 1–5 minutes during market hours);
-- a separate, slower cadence for fundamentals (e.g. daily);
+- an optional universe cap (`--universe-limit`) for testing / smaller runs;
+- quotes always, fundamentals optional (Full runs);
 - batched requests to stay within yfinance's soft rate limits;
 - retry with backoff on transient API failures;
 - graceful handling of delisted/halted/missing symbols;
-- reproducible runs for testing (fixed symbol subset, fixed interval).
+- reproducible runs for testing (fixed symbol subset).
 
 Example:
 
 ```text
 Universe: NIFTY 500 (~500 symbols)
-Quote poll interval: 5 minutes (market hours only)
-Fundamentals poll interval: daily
+Quote poll: one cycle per run
+Fundamentals poll: included on Full runs
 Batch size per request: 50 symbols
 ```
 
-The polling configuration should be tunable so that ingestion throughput and downstream system
-behavior can be tested at different frequencies and universe sizes.
+The universe size and Full/quick mode are tunable so downstream behavior can be tested at
+different scales.
 
 ---
 
@@ -373,21 +373,18 @@ gold.top_picks                    (materialized top-N view)
 
 ---
 
-# 12. Spark Structured Streaming
+# 12. Batch Processing
 
-## Processing stages
+Processing runs on demand as one batch job per stage:
 
 ```text
-Read from Kafka (market.quotes, market.fundamentals)
+Read from Iceberg bronze (quotes_daily, market_fundamentals)
       │
       ▼
 Parse + validate
       │
       ▼
-Write to Iceberg bronze
-      │
-      ▼
-Compute rolling technical indicators (windowed, per-symbol)
+Compute rolling technical indicators (per-symbol)
       │
       ▼
 Join with latest fundamentals
@@ -398,11 +395,13 @@ Write to Iceberg silver
 
 ## Required capabilities
 
-- per-symbol stateful windowed aggregation (moving averages, RSI, volatility);
-- watermarking to handle late-arriving snapshots (e.g. a retried poll);
-- exactly-once (or effectively-once) writes to Iceberg;
-- checkpointing for fault-tolerant restart;
-- join of the fast-moving quotes stream with the slow-changing fundamentals table.
+- per-symbol rolling aggregation (moving averages, RSI, volatility);
+- duplicate/out-of-order safety (dedupe on `(symbol, trade_date)`) for re-run backfills;
+- idempotent writes to Iceberg (overwrite / delete-by-date), so a run can be retried;
+- join of quotes with the latest fundamentals snapshot.
+
+Spark Structured Streaming is intentionally out of scope: the platform is fully
+on-demand, so there is no always-on stream processor.
 
 ---
 
@@ -536,42 +535,42 @@ Apache Druid provides low-latency, on-demand queries over the scored/ranked stoc
 
 # 17. Airflow Orchestration
 
-Airflow manages scheduled workflows rather than acting as the streaming engine.
+Airflow orchestrates the on-demand pipeline (and maintenance/retrain), rather than running an
+always-on engine.
 
 Example DAG:
 
 ```text
-                 Daily Stock Screening Pipeline
+                 On-Demand Stock Screening Pipeline
 
                         START
                           │
                           ▼
-                Refresh NIFTY 500 constituent list
+                 Preflight + resume Druid supervisors
                           │
                           ▼
-                Trigger fundamentals poll (daily)
+                 Poll quotes (and fundamentals on Full)
                           │
                           ▼
-                 Validate ingested data
+                 SeaTunnel -> Iceberg bronze
                           │
                           ▼
-                 Spark batch feature backfill
+                 Spark indicators -> silver
                           │
                           ▼
-                 Retrain / re-evaluate model
+                 Spark MLlib scoring -> gold
                           │
                           ▼
-                Materialize gold.top_picks
+                 Publish snapshot + history (incremental)
                           │
                           ▼
-                 Iceberg maintenance (compaction, expiry)
+                 Wait for Druid, then suspend supervisors
                           │
                           ▼
                          END
 ```
 
-A separate, higher-frequency DAG (or the streaming job itself) handles the intraday quote polling
-cadence independently of this daily batch DAG.
+Model retraining and Iceberg maintenance are separate on-demand DAGs.
 
 ---
 
@@ -592,7 +591,8 @@ cadence independently of this daily batch DAG.
 Broker restart recovery; consumer group rebalancing; topic replay for reprocessing.
 
 ## Spark
-Checkpoint-based recovery of Structured Streaming jobs after a driver/executor failure.
+Batch jobs are re-runnable: Iceberg writes are idempotent (overwrite / delete-by-date), so an
+interrupted stage can be safely retried.
 
 ## HDFS
 NameNode/DataNode recovery; replication factor tuning.
@@ -612,9 +612,8 @@ the universe's poll for that cycle.
 Vary:
 
 - universe size (50 → 200 → 500 symbols);
-- polling frequency (15 min → 5 min → 1 min, where API limits allow);
 - Kafka partition count;
-- Spark executor count.
+- Spark executor count / parallelism.
 
 Measure how each affects end-to-end latency (poll → score available in Druid) and resource usage.
 
@@ -733,14 +732,14 @@ All snapshots persist to HDFS.
 ## FR-05 — Lakehouse Management
 Iceberg maintains bronze/silver/gold tables with schema evolution and time travel.
 
-## FR-06 — Real-Time Processing
-Spark Structured Streaming computes technical indicators per symbol with bounded latency.
+## FR-06 — Batch Processing
+Spark computes technical indicators per symbol in an on-demand batch job.
 
 ## FR-07 — Screening
 Rule-based baseline screens are available and explainable.
 
 ## FR-08 — Machine Learning
-Spark MLlib produces a stock score per symbol per poll cycle.
+Spark MLlib produces a stock score per symbol per run.
 
 ## FR-09 — Analytics
 Druid serves ranked top-K and filtered screening queries with low latency.
@@ -783,7 +782,7 @@ backtested return vs. benchmark.
 Kill Kafka/Spark/Druid mid-pipeline and measure recovery time and data completeness.
 
 ## Experiment 5 — Iceberg
-Demonstrate schema evolution, time travel, and compaction under continuous small-batch writes.
+Demonstrate schema evolution, time travel, and compaction under many small per-run writes.
 
 ## Experiment 6 — Scalability
 Vary partition count and executor count; measure effect on latency and throughput.
@@ -792,8 +791,8 @@ Vary partition count and executor count; measure effect on latency and throughpu
 
 # 28. Success Criteria
 
-- End-to-end pipeline runs unattended for a full trading day.
-- Top-K picks are queryable in Druid within a bounded latency of each poll cycle.
+- The on-demand pipeline runs reproducibly end to end on a single trigger.
+- Top-K picks are queryable in Druid within a bounded latency after each run.
 - The MLlib-based ranking demonstrably outperforms (or is honestly shown not to outperform) the
   rule-based baseline and the NIFTY 500 benchmark in backtest.
 - The system recovers from a killed component without manual data repair.
@@ -803,9 +802,9 @@ Vary partition count and executor count; measure effect on latency and throughpu
 
 # 29. Expected Final Demonstration
 
-A live run against the actual NIFTY 500 universe during market hours, showing: quotes flowing
-through Kafka, Iceberg tables growing, Spark computing indicators, Druid serving a ranked top-10
-picks query, and Airflow's scheduled DAG runs visible in its UI.
+A live run against the actual NIFTY 500 universe, showing: quotes flowing through Kafka, Iceberg
+tables growing, Spark computing indicators, Druid serving a ranked top-10 picks query, and the
+on-demand Airflow DAG run visible in its UI.
 
 ---
 

@@ -7,7 +7,7 @@
 | `market.quotes`          | 16         | 1           | 1 day     | `symbol`        | Price/volume snapshots from the poller (high volume, frequent) |
 | `market.quotes.daily`    | 16         | 1           | 7 days    | `symbol`        | Historical daily OHLCV bars, one-off backfills (see `poller/backfill.py`) |
 | `market.fundamentals`     | 4          | 1           | 7 days    | `symbol`        | P/E, EPS, market cap, etc. (low volume, daily refresh) |
-| `market.scores`           | 4          | 1           | 7 days    | `symbol`        | Output of the scoring model, per poll cycle |
+| `market.scores`           | 4          | 1           | 7 days    | `symbol`        | Output of the scoring model, per run |
 | `market.screener`         | 2          | 1           | 7 days    | `symbol`        | Latest per-symbol snapshot (indicators + fundamentals + scores) for the UI |
 | `market.history`          | 4          | 1           | 7 days    | `symbol`        | Daily indicator bars for the UI price/indicator charts |
 | `market.deadletter`        | 2          | 1           | 30 days   | none (round-robin) | Records that failed validation in SeaTunnel |
@@ -22,23 +22,23 @@ recovery experiments.
 All three data topics are keyed by `symbol` so that every snapshot for a given stock lands on the
 same partition, in the order it was produced. This matters because:
 
-- Spark Structured Streaming's per-symbol rolling-window features (moving averages, RSI,
-  volatility) require in-order processing per symbol — if `AAPL`-equivalent snapshots could land
-  on different partitions, ordering guarantees break and windowed aggregation would need
-  cross-partition coordination instead of simple per-key state.
+- Spark's per-symbol rolling-window features (moving averages, RSI, volatility) rely on in-order
+  processing per symbol — if a stock's snapshots could land on different partitions, ordering
+  would break and the batch indicator job would need cross-partition coordination instead of
+  simple per-symbol processing.
 - Consumer parallelism still works fine: with 16 partitions and ~500 symbols, each partition
   handles the full history of ~30 symbols independently.
 
 ## Why 16 partitions for `market.quotes` specifically
 
-This is the highest-volume topic (a snapshot per symbol per poll cycle, on a 1-5 minute cadence
-per the poller design in §7). 16 gives headroom for the scalability experiments in §20 (which ask
+This is the highest-volume topic (a snapshot per symbol per run; the poller runs one cycle per
+on-demand run). 16 gives headroom for the scalability experiments in §20 (which ask
 us to vary Spark executor/task parallelism) without any real overhead cost at this scale — we're
 running one broker, nowhere near the partition-count ceiling where metadata/file-handle overhead
 would start to matter.
 
 `market.fundamentals` and `market.scores` get 4 partitions since they're much lower-throughput:
-fundamentals refresh once a day, scores are produced once per poll cycle already aggregated
+fundamentals refresh on Full runs, scores are produced once per run already aggregated
 per-symbol (not per-tick). `market.deadletter` gets 2 — it should rarely have meaningful traffic,
 and when it does, order doesn't matter (each dead-letter record is independent), so no key is
 used and Kafka round-robins across partitions.

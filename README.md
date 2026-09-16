@@ -5,8 +5,9 @@ SeaTunnel -> HDFS/Iceberg -> Spark (technical indicators) -> Spark MLlib (scorin
 Druid (low-latency ranked queries), driven by a React dashboard and orchestrated by Airflow.
 
 The pipeline is **on-demand** — press **Run pipeline** in the dashboard (or trigger the Airflow
-DAG) and it refreshes the whole universe end to end. Druid ingests the serving topics continuously,
-so query latency is low even though the batch pipeline is triggered rather than always-on.
+DAG) and it refreshes the whole universe end to end. Nothing runs continuously: the Druid Kafka
+supervisors stay suspended at rest and are resumed only for the duration of a run, then suspended
+again; the dashboard refreshes only when you click **Refresh data**.
 
 Full spec: see `docs/project-spec.md`.
 
@@ -27,12 +28,15 @@ React dashboard ──POST /api/pipeline/run──▶ FastAPI ──REST──�
 Stages (each is a `scripts/` wrapper run as an Airflow task):
 
 1. **preflight** – check HDFS/Kafka/Druid/SeaTunnel are up and a model is selected
-2. **poll** – fetch quotes (and fundamentals on Full runs) via `yfinance`
-3. **ingest** – SeaTunnel drains Kafka into Iceberg bronze
-4. **indicators** – Spark computes SMA/EMA/RSI/MACD/volatility/momentum into silver
-5. **score** – Spark MLlib scores and ranks the latest cross-section into gold
-6. **serve** – publish the latest snapshot to Kafka for Druid ingestion
-7. **wait_for_druid** – block until Druid is serving the fresh snapshot
+2. **druid_resume** – resume the suspended Druid Kafka supervisors
+3. **poll** – fetch quotes (and fundamentals on Full runs) via `yfinance`
+4. **ingest** – SeaTunnel drains Kafka into Iceberg bronze
+5. **indicators** – Spark computes SMA/EMA/RSI/MACD/volatility/momentum into silver
+6. **score** – Spark MLlib scores and ranks the latest cross-section into gold
+7. **serve** – publish the latest snapshot to Kafka (history published incrementally)
+8. **wait_for_druid** – block until Druid is serving the fresh snapshot
+9. **druid_wait / druid_suspend** – wait for lag to drain, then suspend the supervisors
+10. **collect_metrics** – snapshot operations metrics
 
 ## Stack (native install, no Docker for core services)
 
@@ -93,8 +97,8 @@ Pages: **Dashboard** (breadth, gainers/losers, sector performance), **Top Picks*
 **Screener** (filter by industry/score/P-E/RSI/momentum; CSV export), **Stock Detail**
 (price + SMA overlays, RSI, MACD, fundamentals), **Model** (IC + Newey–West t-stat,
 sector-neutral IC, net-of-cost Sharpe vs the rule baseline), **Ops** (Kafka lag, Druid
-segments/latency, HDFS health, pipeline runs). Manual refresh by default; toggle 30s
-auto-refresh in the sidebar.
+segments/latency, HDFS health, pipeline runs). Data updates only when you run the
+pipeline and then click **Refresh data** in the sidebar — no background polling.
 
 See `setup.md` for the full ingestion + ML runbook.
 
@@ -114,13 +118,14 @@ spark/jobs/       Spark batch jobs (indicators, training set, scoring, serving p
 iceberg/schemas/  Bronze / silver / gold + ML table DDL
 ml/               Feature engineering, MLlib training/evaluation, saved models
 api/              FastAPI backend (Druid queries + Airflow pipeline trigger)
-frontend/         React + Vite dashboard (5 pages)
+frontend/         React + Vite dashboard (6 pages)
 airflow/dags/     On-demand + retrain DAGs
-druid/ingestion/  Druid Kafka supervisor specs + submit.sh
+druid/ingestion/  Druid Kafka supervisor specs + on-demand suspend/resume control
 scripts/          Pipeline step wrappers (poll/ingest/indicators/score/serve/retrain)
 config/           Pipeline + Airflow connection config
-tests/            Unit tests (indicators, features, metrics)
-benchmarks/       Throughput/latency/scalability experiments (pending)
+tests/            Unit tests (indicators, features, metrics, benchmarks, monitoring)
+benchmarks/       Throughput/latency/model/recovery/Iceberg/scalability experiments
+monitoring/       Operational metrics + data-quality snapshots
 docs/             Project specification and design notes
 ```
 
@@ -132,8 +137,8 @@ docs/             Project specification and design notes
 - [x] Kafka topics + SeaTunnel ingestion (Kafka -> Iceberg bronze)
 - [x] Spark technical indicators (bronze -> silver)
 - [x] Stock scoring model (Spark MLlib) + evaluation
-- [x] Druid ingestion (Kafka supervisors)
-- [x] FastAPI backend + React dashboard (5 pages)
+- [x] Druid serving via on-demand supervisors (suspended at rest)
+- [x] FastAPI backend + React dashboard (6 pages)
 - [x] On-demand pipeline: dashboard button -> Airflow DAGs + step status
 - [x] Dead-letter routing (SeaTunnel validation -> `market.deadletter`)
 - [x] Iceberg maintenance (compaction, manifest rewrite, snapshot expiry)
@@ -143,11 +148,13 @@ docs/             Project specification and design notes
 - [x] Experiments suite under `benchmarks/` (throughput, latency, model, recovery, Iceberg,
       scalability) — run with the stack up
 - [x] Observability (`monitoring/collect_metrics.py` + `/api/ops` + Ops page)
-- [ ] Spark Structured Streaming (near-real-time indicators)
+- [x] Data-quality checks (`monitoring/data_quality.py`)
+- [x] Fully on-demand: no continuous ingestion, polling, or streaming
 
 ## Notes / limitations
 
 - Data comes from `yfinance` (unofficial, delayed) — fine for research, not for trading decisions.
-- The ML signal is weak but positive (IC ≈ 0.02–0.05), which is expected for noisy forward returns.
+- On the 5y training set the signal is weak but significant (21d excess IC ≈ 0.06, net-of-cost
+  long/short Sharpe ≈ 1.3), which is realistic for noisy forward returns.
 - Single-broker Kafka (`replication.factor=1`) and a single HDFS DataNode: no fault tolerance yet.
 - `market.quotes` Kafka retention is 1 day; run the poller to repopulate it before its Druid datasource exists.

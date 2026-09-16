@@ -401,8 +401,9 @@ run `poller/poller.py --once` to repopulate it. The dashboard does not depend on
 - API docs   http://localhost:8000/docs
 
 Pages: market overview, top picks, screener, stock detail, model evaluation
-(IC / Newey–West t-stat / net-of-cost Sharpe), and Ops. Manual refresh by
-default; toggle 30s auto-refresh in the sidebar. Stop with `./stop-ui.sh`.
+(IC / Newey–West t-stat / net-of-cost Sharpe), and Ops. Data refreshes only when
+you run the pipeline and click **Refresh data** in the sidebar. Stop with
+`./stop-ui.sh`.
 
 ### On-demand pipeline (button / Airflow)
 
