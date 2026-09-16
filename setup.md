@@ -293,11 +293,12 @@ changed (it is a fully derived table).
 ### Train models
 
 Trains GBT, RandomForest and LinearRegression for each **excess-return** label
-(`excess_ret_5d`, `excess_ret_21d`) on the `train` split only, tuning a small
-hyperparameter grid on a time-ordered validation slice (with an embargo) and
-recording feature importances/coefficients. Tree training needs a larger driver
-heap and bounded task parallelism when running in local mode, hence the flags
-below:
+(`excess_ret_5d`, `excess_ret_21d`) on the `train` split only, plus rank-label
+`gbt_rank`/`rf_rank` models (a learning-to-rank approximation, blended by the
+evaluator into `rank_ensemble`). Each algorithm is tuned on a time-ordered
+validation slice (with an embargo) and feature importances/coefficients are
+recorded. Tree training needs a larger driver heap and bounded task parallelism
+when running in local mode, hence the flags below:
 
 ```bash
 spark-submit \

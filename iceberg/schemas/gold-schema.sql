@@ -72,6 +72,10 @@ CREATE TABLE IF NOT EXISTS ml.training_dataset (
   price_momentum_1m DOUBLE,
   price_momentum_3m DOUBLE,
   price_momentum_6m DOUBLE,
+  market_breadth DOUBLE,
+  market_volatility DOUBLE,
+  momentum_x_breadth DOUBLE,
+  volatility_x_market DOUBLE,
 
   fwd_ret_5d DOUBLE,
   fwd_ret_21d DOUBLE,

@@ -36,7 +36,13 @@ from metrics import (  # noqa: E402
 )
 from rules import rule_score  # noqa: E402
 from indicators import compute_features  # noqa: E402
-from transform import MODEL_FEATURES, add_derived_features, apply_cross_sectional, transform_group  # noqa: E402
+from transform import (  # noqa: E402
+    MODEL_FEATURES,
+    add_derived_features,
+    add_regime_features,
+    apply_cross_sectional,
+    transform_group,
+)
 from walk_forward import expanding_folds  # noqa: E402
 from backtest import backtest  # noqa: E402
 from asof import asof_join_fundamentals  # noqa: E402
@@ -181,24 +187,33 @@ def _feature_panel(symbols=("A", "B"), periods=3, scale=1.0):
 
 
 def test_derived_features_are_scale_free():
-    small = add_derived_features(_feature_panel(scale=1.0))
-    large = add_derived_features(_feature_panel(scale=10.0))
+    small = transform_group(_feature_panel(scale=1.0))
+    large = transform_group(_feature_panel(scale=10.0))
     for col in MODEL_FEATURES:
         assert np.allclose(
             small[col].values, large[col].values, equal_nan=True
         ), f"{col} depends on price scale"
 
 
+def test_regime_features_present_and_interact():
+    out = transform_group(_feature_panel(symbols=("A", "B", "C"), periods=1))
+    for col in ("market_breadth", "market_volatility", "momentum_x_breadth",
+                "volatility_x_market"):
+        assert col in out.columns
+    # market breadth is constant within the date -> normalizes to zero
+    assert np.allclose(out["market_breadth"].values, 0.0)
+
+
 def test_cross_sectional_zscore_mean_zero():
     panel = _feature_panel(symbols=("A", "B", "C"), periods=2)
-    out = apply_cross_sectional(add_derived_features(panel))
+    out = apply_cross_sectional(add_regime_features(add_derived_features(panel)))
     means = out.groupby("trade_date")[MODEL_FEATURES].mean().abs()
     assert (means.values < 1e-9).all()
 
 
 def test_cross_sectional_rank_bounds_and_order():
     panel = _feature_panel(symbols=("A", "B", "C"), periods=1)
-    derived = add_derived_features(panel)
+    derived = add_regime_features(add_derived_features(panel))
     out = apply_cross_sectional(derived, method="rank")
     values = out[MODEL_FEATURES].values
     assert (values >= -0.5).all() and (values <= 0.5).all()

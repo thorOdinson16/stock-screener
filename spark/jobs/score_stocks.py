@@ -46,6 +46,12 @@ MODEL_LOADERS = {
     "linear": LinearRegressionModel,
 }
 
+ENSEMBLE_NAME = "rank_ensemble"
+
+
+def load_model(meta):
+    return MODEL_LOADERS[meta.get("base_algo", "gbt")].load(meta["path"])
+
 
 def build_spark(warehouse: str) -> SparkSession:
     spark = (
@@ -85,18 +91,38 @@ def latest_cross_section(spark: SparkSession):
 
 
 def scores_for_label(base, meta, label):
-    model = MODEL_LOADERS[meta["model_name"]].load(meta["path"])
+    """Scores one label. `meta` is either a single model or the rank ensemble
+    (`members`), whose member predictions are averaged."""
     assembler = VectorAssembler(
         inputCols=MODEL_FEATURES, outputCol="features", handleInvalid="skip"
     )
-    scored = model.transform(assembler.transform(base))
+    assembled = assembler.transform(base)
+
+    if meta.get("members"):
+        frames = []
+        for i, member in enumerate(meta["members"]):
+            frames.append(
+                load_model(member)
+                .transform(assembled)
+                .select("symbol", "trade_date", F.col("prediction").alias(f"p{i}"))
+            )
+        merged = frames[0]
+        for frame in frames[1:]:
+            merged = merged.join(frame, ["symbol", "trade_date"], "inner")
+        pcols = [c for c in merged.columns if c.startswith("p")]
+        scored = merged.withColumn(
+            "prediction", sum(F.col(c) for c in pcols) / float(len(pcols))
+        )
+    else:
+        scored = load_model(meta).transform(assembled)
+
     return scored.select(
         "symbol",
         "trade_date",
         F.lit(label).alias("label"),
         F.col("prediction").alias("score"),
         F.lit(meta["model_name"]).alias("model_name"),
-        F.lit(meta["version"]).alias("model_version"),
+        F.lit(meta.get("version", ENSEMBLE_NAME)).alias("model_version"),
     )
 
 

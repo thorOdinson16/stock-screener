@@ -70,11 +70,23 @@ _PASSTHROUGH_FEATURES = [
     "price_momentum_6m",
 ]
 
+# Market-regime context (computed per trade date across the held cross-section)
+# plus interaction terms. The constant market levels normalize to zero
+# cross-sectionally; the interactions let the model condition symbol-level
+# signals on the regime.
+REGIME_FEATURES = [
+    "market_breadth",
+    "market_volatility",
+    "momentum_x_breadth",
+    "volatility_x_market",
+]
+
 # Derived, scale-free model inputs (order is stable — it is written into schemas).
 MODEL_FEATURES = (
     list(_RATIO_RECIPES)
     + list(_MACD_RECIPES)
     + _PASSTHROUGH_FEATURES
+    + REGIME_FEATURES
 )
 
 # Cross-sectional normalization defaults.
@@ -91,6 +103,20 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
         offset = -1.0 if name in _RATIO_RECIPES else 0.0
         out[name] = out[num] / out[den] + offset
     return out.replace([np.inf, -np.inf], np.nan)
+
+
+def add_regime_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Adds per-trade-date market regime features and their interactions with
+    symbol-level signals. Must be called on a single date's cross-section (the
+    Spark jobs group by trade_date)."""
+    out = df.copy()
+    breadth = float((out["close"] > out["sma_50"]).mean())
+    market_vol = float(out["volatility_20d"].mean())
+    out["market_breadth"] = breadth
+    out["market_volatility"] = market_vol
+    out["momentum_x_breadth"] = out["price_momentum_1m"] * breadth
+    out["volatility_x_market"] = out["volatility_20d"] * market_vol
+    return out
 
 
 def _winsorize(series: pd.Series, lower: float, upper: float) -> pd.Series:
@@ -146,7 +172,8 @@ def apply_cross_sectional(
 
 def transform_group(pdf: pd.DataFrame) -> pd.DataFrame:
     """Single-argument Spark `applyInPandas` entry point (one trade date per
-    group): derive then cross-sectionally normalize the model features."""
+    group): derive, add regime context, then cross-sectionally normalize."""
     out = add_derived_features(pdf)
+    out = add_regime_features(out)
     out = apply_cross_sectional(out, columns=MODEL_FEATURES)
     return out[["symbol", "trade_date"] + MODEL_FEATURES]

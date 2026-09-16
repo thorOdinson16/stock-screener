@@ -35,7 +35,7 @@ from pyspark.ml.regression import (
     LinearRegressionModel,
     RandomForestRegressionModel,
 )
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -71,6 +71,12 @@ MODEL_LOADERS = {
     "rf": RandomForestRegressionModel,
     "linear": LinearRegressionModel,
 }
+
+ENSEMBLE_NAME = "rank_ensemble"
+
+
+def load_model(meta):
+    return MODEL_LOADERS[meta.get("base_algo", "gbt")].load(meta["path"])
 
 # Raw (pre-normalization) inputs the rule baseline thresholds require. `close`
 # already comes from the training dataset.
@@ -152,6 +158,57 @@ def evaluate_scores(pdf, score_col, label_col, raw_col, universe_col, index_col,
     }
 
 
+def predict_frame(model, test_prepared, label, raw, universe_col, index_col):
+    return model.transform(test_prepared).select(
+        "symbol", "trade_date", "industry",
+        F.col(label).alias(label), F.col(raw), universe_col, index_col,
+        F.col("prediction"),
+    )
+
+
+def selected_members(best, models):
+    if best == ENSEMBLE_NAME:
+        return [
+            {"algo": name, **models[name]} for name in ("gbt_rank", "rf_rank")
+        ]
+    return [{"algo": best, **models[best]}]
+
+
+def selected_entry(best, models):
+    if best == ENSEMBLE_NAME:
+        return {
+            "model_name": ENSEMBLE_NAME,
+            "members": [
+                {"model_name": name, "path": models[name]["path"],
+                 "base_algo": models[name].get("base_algo", "gbt")}
+                for name in ("gbt_rank", "rf_rank")
+            ],
+        }
+    return {
+        "model_name": best,
+        "path": models[best]["path"],
+        "version": models[best]["version"],
+    }
+
+
+def ensemble_frame(models, test_prepared, test, label, raw, universe_col, index_col):
+    base = test.select(
+        "symbol", "trade_date", "industry",
+        F.col(label).alias(label), raw, universe_col, index_col,
+    )
+    g = predict_frame(load_model(models["gbt_rank"]), test_prepared, label, raw,
+                      universe_col, index_col)
+    r = predict_frame(load_model(models["rf_rank"]), test_prepared, label, raw,
+                      universe_col, index_col)
+    return (
+        base.join(g.select("symbol", "trade_date", F.col("prediction").alias("p_gbt")),
+                  ["symbol", "trade_date"])
+        .join(r.select("symbol", "trade_date", F.col("prediction").alias("p_rf")),
+              ["symbol", "trade_date"])
+        .withColumn("prediction", (F.col("p_gbt") + F.col("p_rf")) / 2.0)
+    )
+
+
 def select_best(label_results, model_names):
     """Best ML model by net-of-cost long/short Sharpe; ties broken by IC t-stat."""
     candidates = {name: label_results[name] for name in model_names if name in label_results}
@@ -193,10 +250,11 @@ def rule_inputs(spark: SparkSession):
     )
 
 
-def walk_forward_metrics(dataset, label, algo, params, k, cost_bps):
+def walk_forward_metrics(dataset, label, members, k, cost_bps):
     horizon = horizon_of(label)
     raw = raw_label(label)
     universe_col, index_col = f"universe_ret_{horizon}d", f"index_ret_{horizon}d"
+    rank_col = f"{label}_rank"
     try:
         dates = [
             row["trade_date"]
@@ -207,22 +265,40 @@ def walk_forward_metrics(dataset, label, algo, params, k, cost_bps):
             assembler = VectorAssembler(
                 inputCols=MODEL_FEATURES, outputCol="features", handleInvalid="skip"
             )
-            train_df = dataset.filter(F.col("trade_date").isin(train_dates)).select(
-                *MODEL_FEATURES, F.col(label).alias("label"), "industry"
-            )
-            test_df = dataset.filter(F.col("trade_date").isin(test_dates)).select(
-                *MODEL_FEATURES,
-                F.col(label).alias("label"),
-                "symbol", "trade_date", "industry",
-                raw, universe_col, index_col,
-            )
-            model = estimator(algo, dict(params)).fit(assembler.transform(train_df))
-            preds = model.transform(assembler.transform(test_df)).select(
+            train = dataset.filter(F.col("trade_date").isin(train_dates))
+            test = dataset.filter(F.col("trade_date").isin(test_dates))
+            if any(m.get("kind") == "rank" for m in members):
+                window = Window.partitionBy("trade_date").orderBy(label)
+                train = train.withColumn(rank_col, F.percent_rank().over(window) - 0.5)
+                test = test.withColumn(rank_col, F.percent_rank().over(window) - 0.5)
+
+            base = test.select(
                 "symbol", "trade_date", "industry",
                 F.col(label).alias(label), raw, universe_col, index_col,
-                F.col("prediction").alias("score"),
             )
-            return preds.toPandas()
+            joined = base
+            pcols = []
+            for m in members:
+                target = rank_col if m.get("kind") == "rank" else label
+                model = estimator(m["algo"], dict(m.get("params") or {})).fit(
+                    assembler.transform(
+                        train.select(*MODEL_FEATURES, F.col(target).alias("label"))
+                    )
+                )
+                alias = f"pred_{m['algo']}"
+                prediction = model.transform(
+                    assembler.transform(test.select(*MODEL_FEATURES, "symbol", "trade_date"))
+                ).select("symbol", "trade_date", F.col("prediction").alias(alias))
+                joined = joined.join(prediction, ["symbol", "trade_date"], "inner")
+                pcols.append(alias)
+
+            joined = joined.withColumn(
+                "score", sum(F.col(c) for c in pcols) / float(len(pcols))
+            )
+            return joined.select(
+                "symbol", "trade_date", "industry",
+                F.col(label).alias("label"), raw, universe_col, index_col, "score",
+            ).toPandas()
 
         wf = run_walk_forward(dates, fit_predict)
         if wf.empty:
@@ -309,38 +385,46 @@ def main():
         )
 
         for algo, meta in models.items():
-            model = MODEL_LOADERS[algo].load(meta["path"])
-            preds = model.transform(test_prepared).select(
-                "symbol", "trade_date", "industry",
-                F.col(label).alias(label), F.col(raw), universe_col, index_col,
-                F.col("prediction"),
+            preds = predict_frame(
+                load_model(meta), test_prepared, label, raw, universe_col, index_col
             )
             label_results[algo] = evaluate_scores(
                 preds.toPandas(), "prediction", label, raw, universe_col, index_col,
                 args.k, horizon, args.cost_bps,
             )
 
-        best = select_best(label_results, list(models.keys()))
+        if "gbt_rank" in models and "rf_rank" in models:
+            label_results[ENSEMBLE_NAME] = evaluate_scores(
+                ensemble_frame(
+                    models, test_prepared, test, label, raw, universe_col, index_col
+                ).toPandas(),
+                "prediction", label, raw, universe_col, index_col,
+                args.k, horizon, args.cost_bps,
+            )
+
+        candidates = list(models.keys()) + (
+            [ENSEMBLE_NAME] if ENSEMBLE_NAME in label_results else []
+        )
+        best = select_best(label_results, candidates)
         if best is not None:
-            selected["labels"][label] = {
-                "model_name": best,
-                "path": models[best]["path"],
-                "version": models[best]["version"],
-            }
+            members = selected_members(best, models)
+            selected["labels"][label] = selected_entry(best, models)
             if not args.skip_walk_forward:
                 label_results["walk_forward"] = walk_forward_metrics(
-                    dataset, label, best, models[best].get("params", {}),
-                    args.k, args.cost_bps,
+                    dataset, label, members, args.k, args.cost_bps,
                 )
             if hf_symbols:
-                hf_model = MODEL_LOADERS[best].load(models[best]["path"])
-                hf_preds = hf_model.transform(
-                    test_prepared.filter(F.col("symbol").isin(hf_symbols))
-                ).select(
-                    "symbol", "trade_date", "industry",
-                    F.col(label).alias(label), F.col(raw), universe_col, index_col,
-                    F.col("prediction"),
-                )
+                hf_test = test_prepared.filter(F.col("symbol").isin(hf_symbols))
+                if best == ENSEMBLE_NAME:
+                    hf_preds = ensemble_frame(
+                        models, hf_test, test.filter(F.col("symbol").isin(hf_symbols)),
+                        label, raw, universe_col, index_col,
+                    )
+                else:
+                    hf_preds = predict_frame(
+                        load_model(models[best]), hf_test, label, raw,
+                        universe_col, index_col,
+                    )
                 robustness[label] = {
                     "model_name": best,
                     "coverage_threshold": args.coverage_threshold,

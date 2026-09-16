@@ -3,15 +3,19 @@ train_model.py — train GBT / RandomForest / Linear regressors for each
 cross-sectional excess-return label on ml.training_dataset and save them to
 ml/models/.
 
+Two families are trained per label:
+
+  * regression on the excess-return label (`gbt`, `rf`, `linear`);
+  * a learning-to-rank approximation (`gbt_rank`, `rf_rank`) on the within-date
+    percentile rank of the excess label (Spark MLlib has no native LTR). The
+    evaluation step blends the two rank models into a `rank_ensemble`.
+
 The model features are the shared, scale-free and cross-sectionally normalized
 features from ml/feature_engineering/transform.py (MODEL_FEATURES). Each
 algorithm is tuned on a time-ordered validation slice carved from the `train`
 split (with an embargo of max(HORIZONS) days between fit and validation), then
 refit on the full train split. Feature importances/coefficients are recorded in
 ml/models/registry.json.
-
-Training uses only the `train` split; `embargo` and `test` rows are excluded.
-Evaluation/model selection is a separate step (ml/evaluation/evaluate.py).
 
 Run (from the repo root):
     spark-submit \
@@ -34,7 +38,7 @@ from pyspark.ml.regression import (
     LinearRegression,
     RandomForestRegressor,
 )
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -46,7 +50,6 @@ from transform import MODEL_FEATURES  # noqa: E402
 
 DEFAULT_MODELS_DIR = os.path.join(_REPO_ROOT, "ml", "models")
 
-# Small hyperparameter grids (tuned on the validation slice).
 GRIDS = {
     "gbt": [
         {"maxIter": 30, "maxDepth": 3},
@@ -65,9 +68,18 @@ GRIDS = {
 }
 
 ALGOS = ["gbt", "rf", "linear"]
+RANK_ALGOS = ["gbt_rank", "rf_rank"]
 TRAIN_PARTITIONS = 8
 VALIDATION_FRACTION = 0.2
 EMBARGO_DAYS = max(HORIZONS)
+
+
+def base_algo(algo: str) -> str:
+    return algo[: -len("_rank")] if algo.endswith("_rank") else algo
+
+
+def is_rank(algo: str) -> bool:
+    return algo.endswith("_rank")
 
 
 def local_uri(path: str) -> str:
@@ -93,6 +105,7 @@ def build_spark(warehouse: str) -> SparkSession:
 
 
 def estimator(algo: str, params: dict):
+    algo = base_algo(algo)
     common = {"featuresCol": "features", "labelCol": "label", "predictionCol": "prediction", "seed": 42}
     if algo == "gbt":
         return GBTRegressor(stepSize=0.05, **params, **common)
@@ -103,7 +116,16 @@ def estimator(algo: str, params: dict):
     raise ValueError(f"unknown algo: {algo}")
 
 
-def time_validation_split(dataset, label: str):
+def prepare(dataset, target: str):
+    assembler = VectorAssembler(
+        inputCols=MODEL_FEATURES, outputCol="features", handleInvalid="skip"
+    )
+    return assembler.transform(
+        dataset.select(*MODEL_FEATURES, F.col(target).alias("label"), "split")
+    )
+
+
+def time_validation_split(dataset):
     """Returns (fit, validation): a time-ordered validation tail of the train
     split, with an embargo gap so fit labels cannot overlap validation."""
     train_pool = dataset.filter(F.col("split") == "train")
@@ -127,22 +149,13 @@ def time_validation_split(dataset, label: str):
 
 
 def feature_attribution(fitted, algo: str) -> dict:
-    if algo in ("gbt", "rf"):
+    if base_algo(algo) in ("gbt", "rf"):
         values = fitted.featureImportances.toArray()
-    elif algo == "linear":
+    elif base_algo(algo) == "linear":
         values = fitted.coefficients.toArray()
     else:
         return {}
     return {name: float(v) for name, v in zip(MODEL_FEATURES, values)}
-
-
-def assemble(dataset, label: str):
-    assembler = VectorAssembler(
-        inputCols=MODEL_FEATURES, outputCol="features", handleInvalid="skip"
-    )
-    return assembler.transform(
-        dataset.select(*MODEL_FEATURES, F.col(label).alias("label"), "split")
-    )
 
 
 def tune(algo: str, fit_df, val_df):
@@ -150,7 +163,7 @@ def tune(algo: str, fit_df, val_df):
         featuresCol="features", labelCol="label", predictionCol="prediction", metricName="rmse"
     )
     best_params, best_rmse = None, None
-    for params in GRIDS[algo]:
+    for params in GRIDS[base_algo(algo)]:
         try:
             model = estimator(algo, params).fit(fit_df)
             rmse = evaluator.evaluate(model.transform(val_df))
@@ -190,16 +203,24 @@ def main():
     }
 
     for label in LABEL_COLUMNS:
-        prepared = assemble(dataset, label).cache()
-        train_df = prepared.filter(F.col("split") == "train").repartition(TRAIN_PARTITIONS)
-        train_rows = train_df.count()
-
-        fit_df, val_df = time_validation_split(dataset, label)
-        fit_df = assemble(fit_df, label).repartition(TRAIN_PARTITIONS).cache()
-        val_df = assemble(val_df, label).repartition(TRAIN_PARTITIONS).cache()
+        rank_col = f"{label}_rank"
+        # Learning-to-rank approximation: within-date percentile rank in [-0.5, 0.5].
+        dataset = dataset.withColumn(
+            rank_col,
+            F.percent_rank().over(Window.partitionBy("trade_date").orderBy(label)) - 0.5,
+        )
+        fit_dates, val_dates = time_validation_split(dataset)
 
         registry["labels"][label] = {}
-        for algo in ALGOS:
+        for algo in ALGOS + RANK_ALGOS:
+            target = rank_col if is_rank(algo) else label
+            train_df = prepare(dataset, target).filter(
+                F.col("split") == "train"
+            ).repartition(TRAIN_PARTITIONS).cache()
+            train_rows = train_df.count()
+            fit_df = prepare(fit_dates, target).repartition(TRAIN_PARTITIONS).cache()
+            val_df = prepare(val_dates, target).repartition(TRAIN_PARTITIONS).cache()
+
             best_params, val_rmse = tune(algo, fit_df, val_df)
             if best_params is None:
                 print(f"skipping {algo}/{label}: no config trained")
@@ -215,6 +236,8 @@ def main():
                 "path": local_uri(path),
                 "version": version,
                 "train_rows": train_rows,
+                "base_algo": base_algo(algo),
+                "kind": "rank" if is_rank(algo) else "excess",
                 "params": best_params,
                 "validation_rmse": val_rmse,
                 "attribution": feature_attribution(fitted, algo),
