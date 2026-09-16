@@ -4,6 +4,10 @@
 
 set -uo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+[ -f "$REPO_ROOT/config/pipeline.env" ] && source "$REPO_ROOT/config/pipeline.env"
+
 LOG_DIR="$HOME/stack-logs"
 PID_DIR="$LOG_DIR/pids"
 
@@ -33,6 +37,11 @@ stop_by_pidfile() {
 
 log "Stopping Airflow..."
 stop_by_pidfile airflow
+# `airflow standalone` spawns detached children (api_server, scheduler,
+# triggerer, workers, serve-logs) that the parent pidfile does not cover.
+pkill -f '[a]irflow' 2>/dev/null || true
+sleep 2
+pkill -9 -f '[a]irflow' 2>/dev/null || true
 
 log "Stopping Druid..."
 # start-single-server-small launches multiple child JVMs under one process group;
