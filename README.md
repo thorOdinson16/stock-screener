@@ -129,28 +129,6 @@ monitoring/       Operational metrics + data-quality snapshots
 docs/             Project specification and design notes
 ```
 
-## Status
-
-- [x] Environment installed and version-pinned
-- [x] Orchestrated start/stop scripts
-- [x] NIFTY 500 poller + historical backfill (yfinance)
-- [x] Kafka topics + SeaTunnel ingestion (Kafka -> Iceberg bronze)
-- [x] Spark technical indicators (bronze -> silver)
-- [x] Stock scoring model (Spark MLlib) + evaluation
-- [x] Druid serving via on-demand supervisors (suspended at rest)
-- [x] FastAPI backend + React dashboard (6 pages)
-- [x] On-demand pipeline: dashboard button -> Airflow DAGs + step status
-- [x] Dead-letter routing (SeaTunnel validation -> `market.deadletter`)
-- [x] Iceberg maintenance (compaction, manifest rewrite, snapshot expiry)
-- [x] ML methodology overhaul (shared scale-free/cross-sectional transforms, excess-return
-      labels, walk-forward/purged K-fold IC + Newey–West, cost-aware long/short backtest,
-      rank ensemble, `ml/experiments/` registry) — results pending the 5y backfill
-- [x] Experiments suite under `benchmarks/` (throughput, latency, model, recovery, Iceberg,
-      scalability) — run with the stack up
-- [x] Observability (`monitoring/collect_metrics.py` + `/api/ops` + Ops page)
-- [x] Data-quality checks (`monitoring/data_quality.py`)
-- [x] Fully on-demand: no continuous ingestion, polling, or streaming
-
 ## Notes / limitations
 
 - Data comes from `yfinance` (unofficial, delayed) — fine for research, not for trading decisions.
