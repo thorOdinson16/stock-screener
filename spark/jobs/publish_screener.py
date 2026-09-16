@@ -156,8 +156,8 @@ def main():
         latest_indicators(spark)
         .join(latest_change_percent(spark), "symbol", "left")
         .join(latest_fundamentals(spark), "symbol", "left")
-        .join(latest_score(spark, "fwd_ret_5d", "score_5d", "rank_5d"), "symbol", "left")
-        .join(latest_score(spark, "fwd_ret_21d", "score_21d", "rank_21d"), "symbol", "left")
+        .join(latest_score(spark, "excess_ret_5d", "score_5d", "rank_5d"), "symbol", "left")
+        .join(latest_score(spark, "excess_ret_21d", "score_21d", "rank_21d"), "symbol", "left")
         .join(F.broadcast(universe_metadata(spark)), "symbol", "left")
         .withColumn(
             "snapshot_at",
