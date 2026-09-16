@@ -12,6 +12,12 @@ export REPO_ROOT
 # shellcheck source=/dev/null
 source "$REPO_ROOT/config/pipeline.env"
 
+# Resolve the poller interpreter against REPO_ROOT, ignoring an inherited value
+# that does not exist (a stale env can otherwise silently break the poll step).
+if [ -z "${POLLER_PYTHON:-}" ] || [ ! -x "${POLLER_PYTHON:-}" ]; then
+  export POLLER_PYTHON="$REPO_ROOT/poller/.venv/bin/python"
+fi
+
 log()  { echo -e "\033[1;34m[pipeline]\033[0m $*"; }
 ok()   { echo -e "\033[1;32m[  ok  ]\033[0m $*"; }
 fail() { echo -e "\033[1;31m[ fail ]\033[0m $*"; }
