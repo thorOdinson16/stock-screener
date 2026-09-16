@@ -8,10 +8,106 @@ A "score" here is any per-symbol prediction (model prediction or rule baseline)
 where higher = more attractive. `ret_col` is the realized forward return.
 """
 
+import math
+
 import numpy as np
 import pandas as pd
 
 DEFAULT_K = 20
+
+
+def newey_west_tstat(series, lags: int | None = None) -> dict:
+    """Mean/t-stat of a (possibly autocorrelated) series with Newey–West HAC
+    standard errors. Overlapping forward-return horizons make the per-date IC /
+    portfolio-return series autocorrelated, so a plain t-stat overstates
+    significance; `lags` should be at least horizon-1."""
+    x = np.asarray([v for v in series if v is not None and not np.isnan(v)], dtype=float)
+    n = len(x)
+    if n < 3:
+        return {"mean": float(x.mean()) if n else np.nan, "t_stat": np.nan,
+                "p_value": np.nan, "n": n, "lags": 0}
+
+    mean = float(x.mean())
+    d = x - mean
+    if lags is None:
+        lags = int(math.floor(4 * (n / 100.0) ** (2.0 / 9.0)))
+    lags = max(0, min(lags, n - 1))
+
+    gamma0 = float(d @ d) / n
+    var = gamma0
+    for lag in range(1, lags + 1):
+        weight = 1.0 - lag / (lags + 1.0)
+        cov = float(d[lag:] @ d[:-lag]) / n
+        var += 2.0 * weight * cov
+
+    if var <= 0:
+        return {"mean": mean, "t_stat": np.nan, "p_value": np.nan, "n": n, "lags": lags}
+    se = math.sqrt(var / n)
+    t = mean / se
+    # Two-sided p-value using the normal approximation (p = erfc(|t|/sqrt2)).
+    p = math.erfc(abs(t) / math.sqrt(2.0))
+    return {"mean": mean, "t_stat": float(t), "p_value": float(p), "n": n, "lags": lags}
+
+
+def deflated_sharpe_ratio(returns, n_trials: int = 1) -> dict:
+    """Deflated Sharpe ratio (López de Prado): the probability the observed
+    Sharpe is real, after accounting for the number of trials and the
+    non-normality (skew/kurtosis) of the return series."""
+    x = np.asarray([v for v in returns if v is not None and not np.isnan(v)], dtype=float)
+    n = len(x)
+    if n < 3 or x.std(ddof=1) == 0:
+        return {"sharpe": np.nan, "benchmark_sharpe": np.nan, "dsr": np.nan, "n": n}
+
+    sr = float(x.mean() / x.std(ddof=1))
+    skew = float(pd.Series(x).skew())
+    kurt = float(pd.Series(x).kurt()) + 3.0  # pandas returns excess kurtosis
+    n_trials = max(1, int(n_trials))
+
+    # Expected maximum Sharpe under the null across `n_trials` independent trials.
+    euler = 0.5772156649
+    if n_trials > 1:
+        z1 = _norm_ppf(1.0 - 1.0 / n_trials)
+        z2 = _norm_ppf(1.0 - 1.0 / (n_trials * math.e))
+        sr0 = (1.0 - euler) * z1 + euler * z2
+    else:
+        sr0 = 0.0
+
+    denom = math.sqrt(max(1e-12, 1.0 - skew * sr + (kurt - 1.0) / 4.0 * sr**2))
+    dsr = _norm_cdf((sr - sr0) * math.sqrt(n - 1) / denom)
+    return {"sharpe": sr, "benchmark_sharpe": float(sr0), "dsr": float(dsr), "n": n}
+
+
+def _norm_cdf(z: float) -> float:
+    return 0.5 * math.erfc(-z / math.sqrt(2.0))
+
+
+def _norm_ppf(p: float) -> float:
+    """Acklam's rational approximation to the inverse normal CDF."""
+    if p <= 0.0:
+        return -math.inf
+    if p >= 1.0:
+        return math.inf
+    a = [-3.969683028665376e01, 2.209460984245205e02, -2.759285104469687e02,
+         1.383577518672690e02, -3.066479806614716e01, 2.506628277459239e00]
+    b = [-5.447609879822406e01, 1.615858368580409e02, -1.556989798598866e02,
+         6.680131188771972e01, -1.328068155288572e01]
+    c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e00,
+         -2.549732539343734e00, 4.374664141464968e00, 2.938163982698783e00]
+    d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00,
+         3.754408661907416e00]
+    plow, phigh = 0.02425, 1 - 0.02425
+    if p < plow:
+        q = math.sqrt(-2 * math.log(p))
+        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
+               ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+    if p > phigh:
+        q = math.sqrt(-2 * math.log(1 - p))
+        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
+                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+    q = p - 0.5
+    r = q * q
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q / \
+           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
 
 
 def _spearman(a, b) -> float:
@@ -26,9 +122,15 @@ def _spearman(a, b) -> float:
 
 
 def information_coefficient(
-    df: pd.DataFrame, score_col: str, ret_col: str, date_col: str = "trade_date"
+    df: pd.DataFrame,
+    score_col: str,
+    ret_col: str,
+    date_col: str = "trade_date",
+    lags: int | None = None,
 ) -> dict:
-    """Per-date rank correlation between score and realized return, averaged."""
+    """Per-date rank correlation between score and realized return, averaged,
+    with a Newey–West t-stat over the (autocorrelated, overlapping-horizon) IC
+    series. Pass `lags` = horizon-1 for daily rebalancing."""
     data = df.dropna(subset=[score_col, ret_col])
     ics = []
     for _, group in data.groupby(date_col):
@@ -37,15 +139,19 @@ def information_coefficient(
             ics.append(ic)
 
     if not ics:
-        return {"ic_mean": np.nan, "ic_std": np.nan, "ic_ir": np.nan, "n_dates": 0}
+        return {"ic_mean": np.nan, "ic_std": np.nan, "ic_ir": np.nan,
+                "ic_t_stat": np.nan, "ic_p_value": np.nan, "n_dates": 0}
 
     arr = np.asarray(ics, dtype=float)
     mean = float(arr.mean())
     std = float(arr.std(ddof=1)) if len(arr) > 1 else 0.0
+    nw = newey_west_tstat(arr, lags=lags)
     return {
         "ic_mean": mean,
         "ic_std": std,
         "ic_ir": float(mean / std) if std > 0 else np.nan,
+        "ic_t_stat": nw["t_stat"],
+        "ic_p_value": nw["p_value"],
         "n_dates": int(len(arr)),
     }
 

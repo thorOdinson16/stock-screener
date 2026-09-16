@@ -272,8 +272,11 @@ python tests/test_features.py
 
 ### Build the training dataset
 
-Adds both forward-return labels, the two benchmark returns, and the
-leakage-safe train/embargo/test split:
+Applies the shared scale-free/cross-sectional transforms
+(`ml/feature_engineering/transform.py`, used identically at scoring time), adds
+`industry`, the raw forward-return labels, the excess-return training labels
+(`excess_ret_*`), the two benchmark returns, and the leakage-safe
+train/embargo/test split:
 
 ```bash
 spark-submit \
@@ -284,12 +287,17 @@ spark-submit \
 
 Expect roughly one row per `(symbol, trade_date)` for non-index symbols; the last
 5/21 bars per symbol have null labels and the split is `train`/`embargo`/`test`.
+`build_training.py` recreates `ml.training_dataset` automatically if its schema
+changed (it is a fully derived table).
 
 ### Train models
 
-Trains GBT, RandomForest and LinearRegression for each label (`fwd_ret_5d`,
-`fwd_ret_21d`) on the `train` split only. Tree training needs a larger driver heap
-and bounded task parallelism when running in local mode, hence the flags below:
+Trains GBT, RandomForest and LinearRegression for each **excess-return** label
+(`excess_ret_5d`, `excess_ret_21d`) on the `train` split only, tuning a small
+hyperparameter grid on a time-ordered validation slice (with an embargo) and
+recording feature importances/coefficients. Tree training needs a larger driver
+heap and bounded task parallelism when running in local mode, hence the flags
+below:
 
 ```bash
 spark-submit \
@@ -304,8 +312,10 @@ Artifacts go to `ml/models/<algo>_<label>_<timestamp>/`, indexed by
 ### Evaluate + select the best model per label
 
 Scores every model and the interpretable rule baseline (spec §13) on the `test`
-split, reporting Information Coefficient, Precision@K (vs both benchmarks),
-RMSE/MAE, mean top-K forward return and turnover:
+split, reporting Information Coefficient with a Newey–West t-stat, a
+sector-neutral IC view, Precision@K (vs both benchmarks), and a non-overlapping
+long/short backtest net of 10 bps/side. The selected model is chosen by net
+Sharpe, and a walk-forward check is run for it:
 
 ```bash
 spark-submit \
@@ -314,8 +324,8 @@ spark-submit \
   ml/evaluation/evaluate.py
 ```
 
-Writes `ml/evaluation/results/comparison.{json,md}` and
-`ml/models/selected.json`.
+Writes `ml/evaluation/results/comparison.{json,md}`, `ml/models/selected.json`,
+and a reproducible run record under `ml/experiments/`.
 
 ### Score the universe -> gold + Kafka
 

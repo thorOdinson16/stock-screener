@@ -21,14 +21,24 @@ sys.path.insert(0, os.path.join(_ROOT, "ml", "feature_engineering"))
 sys.path.insert(0, os.path.join(_ROOT, "ml", "evaluation"))
 sys.path.insert(0, os.path.join(_ROOT, "spark", "jobs"))
 
-from features import add_forward_returns, assign_split, compute_split_dates  # noqa: E402
+from features import (  # noqa: E402
+    add_excess_returns,
+    add_forward_returns,
+    assign_split,
+    compute_split_dates,
+)
 from metrics import (  # noqa: E402
+    deflated_sharpe_ratio,
     information_coefficient,
+    newey_west_tstat,
     precision_at_k,
     turnover,
 )
 from rules import rule_score  # noqa: E402
 from indicators import compute_features  # noqa: E402
+from transform import MODEL_FEATURES, add_derived_features, apply_cross_sectional, transform_group  # noqa: E402
+from walk_forward import expanding_folds  # noqa: E402
+from backtest import backtest  # noqa: E402
 
 
 def _frame(closes, symbol="TEST.NS", start="2020-01-01"):
@@ -135,6 +145,146 @@ def test_rule_score_bounds():
     )
     score = rule_score(df)
     assert score.iloc[0] == 4.0  # all four conditions matched
+
+
+def _feature_panel(symbols=("A", "B"), periods=3, scale=1.0):
+    """Raw-indicator panel. `scale` multiplies every price-level column so the
+    derived ratios must be invariant to it."""
+    rows = []
+    for sym in symbols:
+        for i in range(periods):
+            price = lambda offset=0.0: (100.0 + i + offset) * scale
+            rows.append(
+                {
+                    "symbol": sym,
+                    "trade_date": f"2020-01-{i + 1:02d}",
+                    "close": price(0),
+                    "sma_20": price(-1),
+                    "sma_50": price(-2),
+                    "sma_200": price(-3),
+                    "ema_12": price(-1),
+                    "ema_26": price(-2),
+                    "macd": 0.5 * scale,
+                    "macd_signal": 0.25 * scale,
+                    "rsi_14": 50.0 + i,
+                    "volatility_20d": 0.02,
+                    "volume_ratio": 1.0 + i * 0.1,
+                    "distance_from_52w_high": -0.1 - i * 0.01,
+                    "distance_from_52w_low": 0.2 + i * 0.01,
+                    "price_momentum_1m": 0.01 * i,
+                    "price_momentum_3m": 0.02 * i,
+                    "price_momentum_6m": 0.03 * i,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_derived_features_are_scale_free():
+    small = add_derived_features(_feature_panel(scale=1.0))
+    large = add_derived_features(_feature_panel(scale=10.0))
+    for col in MODEL_FEATURES:
+        assert np.allclose(
+            small[col].values, large[col].values, equal_nan=True
+        ), f"{col} depends on price scale"
+
+
+def test_cross_sectional_zscore_mean_zero():
+    panel = _feature_panel(symbols=("A", "B", "C"), periods=2)
+    out = apply_cross_sectional(add_derived_features(panel))
+    means = out.groupby("trade_date")[MODEL_FEATURES].mean().abs()
+    assert (means.values < 1e-9).all()
+
+
+def test_cross_sectional_rank_bounds_and_order():
+    panel = _feature_panel(symbols=("A", "B", "C"), periods=1)
+    derived = add_derived_features(panel)
+    out = apply_cross_sectional(derived, method="rank")
+    values = out[MODEL_FEATURES].values
+    assert (values >= -0.5).all() and (values <= 0.5).all()
+    # rsi_14 increases with the symbol's row index -> preserved order after ranking
+    order = np.argsort(derived["rsi_14"].values)
+    ranked = out["rsi_14"].values
+    assert list(order) == list(np.argsort(ranked))
+
+
+def test_excess_returns_mean_zero_per_date():
+    df = _feature_panel(symbols=("A", "B", "C"), periods=1)
+    df["fwd_ret_5d"] = [0.01, 0.02, 0.03]
+    df["fwd_ret_21d"] = [0.05, -0.01, 0.02]
+    out = add_excess_returns(df)
+    for col in ("excess_ret_5d", "excess_ret_21d"):
+        assert abs(out[col].mean()) < 1e-12
+
+
+def test_transform_train_serve_parity_per_date():
+    """Scoring sees one cross-section; normalizing a single date must match the
+    same date inside the full panel (no cross-date dependence)."""
+    panel = _feature_panel(symbols=("A", "B", "C", "D"), periods=4)
+    full = pd.concat([transform_group(g) for _, g in panel.groupby("trade_date")])
+    for date, group in panel.groupby("trade_date"):
+        single = transform_group(group)
+        full_date = full[full["trade_date"] == date].sort_values("symbol").reset_index(drop=True)
+        single = single.sort_values("symbol").reset_index(drop=True)
+        assert np.allclose(full_date[MODEL_FEATURES].values, single[MODEL_FEATURES].values)
+
+
+def test_walk_forward_embargo_and_expanding():
+    folds = expanding_folds(list(range(100)), n_folds=5, min_train_fraction=0.4,
+                            test_fraction=0.12, embargo_days=21)
+    assert folds
+    prev_train = -1
+    for fold in folds:
+        assert max(fold["train_dates"]) < min(fold["test_dates"])
+        assert min(fold["test_dates"]) - max(fold["train_dates"]) >= 21
+        assert len(fold["train_dates"]) > prev_train  # expanding
+        prev_train = len(fold["train_dates"])
+
+
+def test_backtest_cost_math():
+    df = pd.DataFrame(
+        {
+            "trade_date": ["2020-01-01", "2020-01-01"],
+            "symbol": ["A", "B"],
+            "score": [2.0, 1.0],
+            "fwd_ret_5d": [0.10, 0.0],
+        }
+    )
+    result = backtest(df, horizon=5, k=1, cost_bps=10.0, long_short=False)
+    assert abs(result["avg_gross_return"] - 0.10) < 1e-12
+    # opening a position = one-way turnover 1.0 -> 2 sides * 10bps
+    assert abs(result["avg_cost"] - 0.002) < 1e-12
+    assert abs(result["net_total_return"] - 0.098) < 1e-12
+
+
+def test_backtest_long_short_spread():
+    df = pd.DataFrame(
+        {
+            "trade_date": ["2020-01-01", "2020-01-01"],
+            "symbol": ["A", "B"],
+            "score": [2.0, 1.0],
+            "fwd_ret_5d": [0.10, -0.04],
+        }
+    )
+    result = backtest(df, horizon=5, k=1, cost_bps=0.0, long_short=True)
+    assert abs(result["avg_gross_return"] - 0.14) < 1e-12
+
+
+def test_newey_west_significance():
+    rng = np.random.default_rng(0)
+    strong = newey_west_tstat(0.05 + rng.normal(0, 0.001, 100), lags=4)
+    assert strong["mean"] > 0.04
+    assert strong["t_stat"] > 5
+    noisy = newey_west_tstat(rng.normal(0, 1, 200), lags=4)
+    assert abs(noisy["t_stat"]) < 3
+
+
+def test_deflated_sharpe_penalizes_trials():
+    rng = np.random.default_rng(1)
+    returns = 0.001 + rng.normal(0, 0.01, 250)
+    one = deflated_sharpe_ratio(returns, n_trials=1)
+    many = deflated_sharpe_ratio(returns, n_trials=100)
+    assert 0.0 <= one["dsr"] <= 1.0
+    assert one["dsr"] >= many["dsr"]
 
 
 def _run_all():

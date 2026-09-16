@@ -6,40 +6,31 @@ Kept free of Spark imports so it can be unit-tested directly
 (tests/test_features.py) and reused inside the Spark jobs via `addPyFile`
 (spark/jobs/build_training.py calls `compute_labels` inside applyInPandas).
 
-Label semantics: forward N-trading-day return for a single symbol,
-`close[t+N] / close[t] - 1`. It is undefined (NaN) for the last N bars of each
-symbol's history.
+Label semantics: the raw forward N-trading-day return for a single symbol,
+`close[t+N] / close[t] - 1` (undefined / NaN for the last N bars of each
+symbol's history), and the training target `excess_ret_Nd` = that raw return
+minus the cross-sectional mean on the same date (see `add_excess_returns`).
 
 Feature semantics: the §6.3 technical indicators already computed in
-silver.quotes_enriched. All of them (rolling means / ewm / shift) use only data
-at or before t, so they are point-in-time safe — no look-ahead.
+silver.quotes_enriched, then the shared, scale-free derivations and
+cross-sectional normalization in `transform.py`. All inputs (rolling means /
+ewm / shift) use only data at or before t, so they are point-in-time safe — no
+look-ahead. Model feature names live in `transform.MODEL_FEATURES`.
 """
 
 import pandas as pd
 
-FEATURE_COLUMNS = [
-    "sma_20",
-    "sma_50",
-    "sma_200",
-    "ema_12",
-    "ema_26",
-    "rsi_14",
-    "macd",
-    "macd_signal",
-    "volatility_20d",
-    "volume_avg_20d",
-    "volume_ratio",
-    "distance_from_52w_high",
-    "distance_from_52w_low",
-    "price_momentum_1m",
-    "price_momentum_3m",
-    "price_momentum_6m",
-]
+from transform import MODEL_FEATURES, RAW_FEATURE_COLUMNS
 
-MODEL_FEATURES = list(FEATURE_COLUMNS)
+# Backwards-compatible alias: raw technical indicators as stored in silver.
+FEATURE_COLUMNS = list(RAW_FEATURE_COLUMNS)
 
 HORIZONS = (5, 21)
-LABEL_COLUMNS = [f"fwd_ret_{h}d" for h in HORIZONS]
+
+# Raw forward returns (kept for reporting / benchmark aggregation).
+RAW_LABEL_COLUMNS = [f"fwd_ret_{h}d" for h in HORIZONS]
+# Training targets: cross-sectional excess return over the equal-weight universe.
+LABEL_COLUMNS = [f"excess_ret_{h}d" for h in HORIZONS]
 
 # Benchmark index symbols are backfilled through the same daily pipeline
 # (poller/backfill.py --include-index) but excluded from the tradable universe and
@@ -56,6 +47,17 @@ def add_forward_returns(df: pd.DataFrame, horizons=HORIZONS) -> pd.DataFrame:
     for h in horizons:
         future_close = out.groupby("symbol", sort=False)["close"].shift(-h)
         out[f"fwd_ret_{h}d"] = future_close / out["close"] - 1.0
+    return out
+
+
+def add_excess_returns(df: pd.DataFrame) -> pd.DataFrame:
+    """Adds `excess_ret_{h}d` = forward return minus the cross-sectional mean
+    forward return on the same trade date. Screening is inherently relative, so
+    the excess label removes the market/common factor the model cannot trade."""
+    out = df.copy()
+    for h, raw in zip(HORIZONS, RAW_LABEL_COLUMNS):
+        mean = out.groupby("trade_date")[raw].transform("mean")
+        out[f"excess_ret_{h}d"] = out[raw] - mean
     return out
 
 

@@ -32,8 +32,11 @@ from pyspark.sql import functions as F
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
-sys.path.insert(0, os.path.join(_REPO_ROOT, "ml", "feature_engineering"))
-from features import BENCHMARK_SYMBOLS, MODEL_FEATURES  # noqa: E402
+_FEATURES_DIR = os.path.join(_REPO_ROOT, "ml", "feature_engineering")
+sys.path.insert(0, _FEATURES_DIR)
+from features import BENCHMARK_SYMBOLS  # noqa: E402
+from spark_schema import NORMALIZED_SCHEMA  # noqa: E402
+from transform import MODEL_FEATURES, RAW_FEATURE_COLUMNS, transform_group  # noqa: E402
 
 DEFAULT_SELECTED = os.path.join(_REPO_ROOT, "ml", "models", "selected.json")
 
@@ -45,7 +48,7 @@ MODEL_LOADERS = {
 
 
 def build_spark(warehouse: str) -> SparkSession:
-    return (
+    spark = (
         SparkSession.builder.appName("score_stocks")
         .config(
             "spark.sql.extensions",
@@ -58,6 +61,9 @@ def build_spark(warehouse: str) -> SparkSession:
         .config("spark.sql.session.timeZone", "UTC")
         .getOrCreate()
     )
+    for module in ("features.py", "transform.py"):
+        spark.sparkContext.addPyFile(os.path.join(_FEATURES_DIR, module))
+    return spark
 
 
 def latest_cross_section(spark: SparkSession):
@@ -65,15 +71,17 @@ def latest_cross_section(spark: SparkSession):
     universe = silver.filter(~F.col("symbol").isin(*BENCHMARK_SYMBOLS))
     score_date = universe.agg(F.max("trade_date")).first()[0]
 
-    base = (
-        universe.filter(F.col("trade_date") == F.lit(score_date))
-        .select(
-            "symbol",
-            "trade_date",
-            *[F.col(c).cast("double").alias(c) for c in MODEL_FEATURES],
-        )
+    base = universe.filter(F.col("trade_date") == F.lit(score_date)).select(
+        "symbol",
+        "trade_date",
+        F.col("close").cast("double").alias("close"),
+        *[F.col(c).cast("double").alias(c) for c in RAW_FEATURE_COLUMNS],
     )
-    return base, score_date
+    # Same transform chain as training (grouped by date; here a single date).
+    features = base.groupBy("trade_date").applyInPandas(
+        transform_group, schema=NORMALIZED_SCHEMA
+    )
+    return features, score_date
 
 
 def scores_for_label(base, meta, label):

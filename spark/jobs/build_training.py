@@ -1,20 +1,28 @@
 """
 build_training.py — silver -> ml.training_dataset.
 
-Reads silver.quotes_enriched, adds both forward-return labels, attaches the two
-benchmark returns (universe cross-sectional mean and the benchmark index), assigns
-a leakage-safe train/embargo/test split, and overwrites ml.training_dataset.
+Reads silver.quotes_enriched, computes raw forward returns per symbol, applies
+the shared scale-free/cross-sectional transforms from
+ml/feature_engineering/transform.py, attaches `industry`, the two benchmark
+returns (universe cross-sectional mean and the benchmark index) and the
+cross-sectional excess-return labels, assigns a leakage-safe train/embargo/test
+split, and overwrites ml.training_dataset.
+
+Feature derivation/normalization is delegated to transform.transform_group so
+that the exact same code path runs at scoring time
+(spark/jobs/score_stocks.py) — train/serve parity by construction.
 
 Run (from the repo root):
     spark-submit \
       --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
       spark/jobs/build_training.py
 
-Prereq: `spark-sql ... -f iceberg/schemas/gold-schema.sql` has been run, and the
-benchmark index has been backfilled (poller/backfill.py --include-index).
+Prereq: the benchmark index has been backfilled
+(poller/backfill.py --include-index).
 """
 
 import argparse
+import json
 import os
 import sys
 
@@ -30,33 +38,62 @@ from pyspark.sql.types import (
 )
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_FEATURES_DIR = os.path.abspath(os.path.join(_HERE, "..", "..", "ml", "feature_engineering"))
+_REPO_ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
+_FEATURES_DIR = os.path.join(_REPO_ROOT, "ml", "feature_engineering")
 sys.path.insert(0, _FEATURES_DIR)
 from features import (  # noqa: E402
     BENCHMARK_SYMBOLS,
-    FEATURE_COLUMNS,
     HORIZONS,
     LABEL_COLUMNS,
+    RAW_FEATURE_COLUMNS,
+    RAW_LABEL_COLUMNS,
     compute_labels,
     compute_split_dates,
 )
+from spark_schema import NORMALIZED_SCHEMA  # noqa: E402
+from transform import MODEL_FEATURES, transform_group  # noqa: E402
+
+UNIVERSE_CACHE = os.path.join(_REPO_ROOT, "poller", "universe", "universe_cache.json")
 
 INPUT_FIELDS = [
     StructField("symbol", StringType()),
     StructField("trade_date", DateType()),
     StructField("close", DoubleType()),
     StructField("volume", LongType()),
-] + [StructField(c, DoubleType()) for c in FEATURE_COLUMNS]
+] + [StructField(c, DoubleType()) for c in RAW_FEATURE_COLUMNS]
 
-DATASET_FIELDS = INPUT_FIELDS + [StructField(c, DoubleType()) for c in LABEL_COLUMNS]
+DATASET_FIELDS = INPUT_FIELDS + [
+    StructField(c, DoubleType()) for c in RAW_LABEL_COLUMNS
+]
 
-BENCHMARK_FIELDS = (
-    [StructField(f"universe_ret_{h}d", DoubleType()) for h in HORIZONS]
-    + [StructField(f"index_ret_{h}d", DoubleType()) for h in HORIZONS]
-    + [StructField("split", StringType())]
+# Final column order (must match the DDL below).
+FINAL_COLUMNS = (
+    ["symbol", "trade_date", "industry", "close", "volume"]
+    + MODEL_FEATURES
+    + RAW_LABEL_COLUMNS
+    + LABEL_COLUMNS
+    + [f"universe_ret_{h}d" for h in HORIZONS]
+    + [f"index_ret_{h}d" for h in HORIZONS]
+    + ["split"]
 )
 
-FINAL_COLUMNS = [f.name for f in DATASET_FIELDS] + [f.name for f in BENCHMARK_FIELDS]
+_TRAINING_COLUMNS = (
+    ["symbol STRING NOT NULL", "trade_date DATE NOT NULL", "industry STRING",
+     "close DOUBLE", "volume BIGINT"]
+    + [f"{c} DOUBLE" for c in MODEL_FEATURES]
+    + [f"{c} DOUBLE" for c in RAW_LABEL_COLUMNS]
+    + [f"{c} DOUBLE" for c in LABEL_COLUMNS]
+    + [f"universe_ret_{h}d DOUBLE" for h in HORIZONS]
+    + [f"index_ret_{h}d DOUBLE" for h in HORIZONS]
+    + ["split STRING NOT NULL"]
+)
+
+TRAINING_DDL = (
+    "CREATE TABLE IF NOT EXISTS iceberg.ml.training_dataset (\n  "
+    + ",\n  ".join(_TRAINING_COLUMNS)
+    + "\n)\nUSING iceberg\nLOCATION '/warehouse/ml/training_dataset'\n"
+    "TBLPROPERTIES ('format-version'='2', 'write.parquet.compression-codec'='snappy')"
+)
 
 
 def build_spark(warehouse: str) -> SparkSession:
@@ -73,8 +110,36 @@ def build_spark(warehouse: str) -> SparkSession:
         .config("spark.sql.session.timeZone", "UTC")
         .getOrCreate()
     )
-    spark.sparkContext.addPyFile(os.path.join(_FEATURES_DIR, "features.py"))
+    for module in ("features.py", "transform.py"):
+        spark.sparkContext.addPyFile(os.path.join(_FEATURES_DIR, module))
     return spark
+
+
+def ensure_training_table(spark: SparkSession) -> None:
+    """ml.training_dataset is fully derived; if its schema has changed since the
+    last build, recreate it (one-time migration)."""
+    try:
+        existing = spark.table("iceberg.ml.training_dataset").columns
+    except Exception:  # noqa: BLE001 — table does not exist yet
+        existing = None
+
+    if existing == FINAL_COLUMNS:
+        return
+    if existing is not None:
+        print("ml.training_dataset schema changed; recreating table.")
+        spark.sql("DROP TABLE IF EXISTS iceberg.ml.training_dataset")
+    spark.sql(TRAINING_DDL)
+
+
+def universe_metadata(spark: SparkSession):
+    """symbol -> industry, from the poller's cached NIFTY 500 list."""
+    if not os.path.exists(UNIVERSE_CACHE):
+        print(f"WARNING: {UNIVERSE_CACHE} missing — industry will be 'Unknown'.")
+        return spark.createDataFrame([], "symbol string, industry string")
+    with open(UNIVERSE_CACHE) as fh:
+        stocks = json.load(fh)["stocks"]
+    rows = [(s["yf_symbol"], s.get("industry") or "Unknown") for s in stocks]
+    return spark.createDataFrame(rows, ["symbol", "industry"])
 
 
 def build_dataset(spark: SparkSession):
@@ -85,7 +150,7 @@ def build_dataset(spark: SparkSession):
             "trade_date",
             F.col("close").cast("double").alias("close"),
             F.col("volume").cast("long").alias("volume"),
-            *[F.col(c).cast("double").alias(c) for c in FEATURE_COLUMNS],
+            *[F.col(c).cast("double").alias(c) for c in RAW_FEATURE_COLUMNS],
         )
         .dropna(subset=["close"])
     )
@@ -101,26 +166,39 @@ def build_dataset(spark: SparkSession):
     ]
     test_start, embargo_start = compute_split_dates(dates)
 
+    # Shared, scale-free + cross-sectionally normalized model features.
+    raw_for_transform = base.select("symbol", "trade_date", "close", *RAW_FEATURE_COLUMNS)
+    features = raw_for_transform.groupBy("trade_date").applyInPandas(
+        transform_group, schema=NORMALIZED_SCHEMA
+    )
+
     is_benchmark = F.col("symbol").isin(*BENCHMARK_SYMBOLS)
     universe = labeled.filter(~is_benchmark)
     index = labeled.filter(is_benchmark)
 
     universe_bench = universe.groupBy("trade_date").agg(
-        *[F.avg(c).alias(f"universe_ret_{h}d") for h, c in zip(HORIZONS, LABEL_COLUMNS)]
+        *[F.avg(c).alias(f"universe_ret_{h}d") for h, c in zip(HORIZONS, RAW_LABEL_COLUMNS)]
     )
     index_bench = index.groupBy("trade_date").agg(
-        *[F.first(c).alias(f"index_ret_{h}d") for h, c in zip(HORIZONS, LABEL_COLUMNS)]
+        *[F.first(c).alias(f"index_ret_{h}d") for h, c in zip(HORIZONS, RAW_LABEL_COLUMNS)]
     )
 
-    dataset = (
-        universe.join(universe_bench, "trade_date", "left")
+    core = (
+        labeled.select("symbol", "trade_date", "close", "volume", *RAW_LABEL_COLUMNS)
+        .join(features, ["symbol", "trade_date"], "inner")
+        .join(F.broadcast(universe_metadata(spark)), "symbol", "left")
+        .fillna({"industry": "Unknown"})
+        .join(universe_bench, "trade_date", "left")
         .join(index_bench, "trade_date", "left")
-        .withColumn(
-            "split",
-            F.when(F.col("trade_date") >= F.lit(str(test_start)).cast("date"), F.lit("test"))
-            .when(F.col("trade_date") >= F.lit(str(embargo_start)).cast("date"), F.lit("embargo"))
-            .otherwise(F.lit("train")),
-        )
+    )
+    for h, raw, excess in zip(HORIZONS, RAW_LABEL_COLUMNS, LABEL_COLUMNS):
+        core = core.withColumn(excess, F.col(raw) - F.col(f"universe_ret_{h}d"))
+
+    dataset = core.withColumn(
+        "split",
+        F.when(F.col("trade_date") >= F.lit(str(test_start)).cast("date"), F.lit("test"))
+        .when(F.col("trade_date") >= F.lit(str(embargo_start)).cast("date"), F.lit("embargo"))
+        .otherwise(F.lit("train")),
     )
     return dataset.select(*FINAL_COLUMNS), test_start, embargo_start
 
@@ -135,6 +213,7 @@ def main():
     spark = build_spark(args.warehouse)
     spark.sparkContext.setLogLevel("WARN")
 
+    ensure_training_table(spark)
     dataset, test_start, embargo_start = build_dataset(spark)
     dataset.createOrReplaceTempView("training_stage")
     spark.sql(

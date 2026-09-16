@@ -135,6 +135,9 @@ docs/             Project specification and design notes
 - [x] On-demand pipeline: dashboard button -> Airflow DAGs + step status
 - [x] Dead-letter routing (SeaTunnel validation -> `market.deadletter`)
 - [x] Iceberg maintenance (compaction, manifest rewrite, snapshot expiry)
+- [x] ML methodology overhaul (shared scale-free/cross-sectional transforms, excess-return
+      labels, walk-forward IC + Newey–West, cost-aware long/short backtest, `ml/experiments/`
+      registry) — results pending the 5y backfill
 - [ ] Spark Structured Streaming (near-real-time indicators)
 - [ ] Experiments (throughput, latency, fault recovery, Iceberg, scalability, model performance)
 

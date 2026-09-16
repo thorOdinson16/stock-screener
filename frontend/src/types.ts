@@ -86,9 +86,20 @@ export interface HistoryResponse {
   history: HistoryPoint[];
 }
 
+export interface BacktestMetric {
+  net_sharpe: number | null;
+  net_annualized_return: number | null;
+  net_max_drawdown: number | null;
+  gross_sharpe: number | null;
+  avg_turnover: number | null;
+  [key: string]: unknown;
+}
+
 export interface ModelMetric {
   ic_mean: number | null;
   ic_ir: number | null;
+  ic_t_stat: number | null;
+  sector_neutral_ic_mean: number | null;
   precision_at_k_vs_universe: number | null;
   precision_at_k_vs_index: number | null;
   rmse: number | null;
@@ -96,13 +107,23 @@ export interface ModelMetric {
   universe_mean_forward_return: number | null;
   index_mean_forward_return: number | null;
   top_k_turnover: number | null;
+  backtest?: BacktestMetric | null;
+  [key: string]: unknown;
+}
+
+export interface WalkForwardMetric {
+  n_periods?: number;
+  ic_mean?: number | null;
+  ic_t_stat?: number | null;
+  net_sharpe?: number | null;
   [key: string]: unknown;
 }
 
 export interface ComparisonResponse {
   evaluated_at: string;
   k: number;
-  labels: Record<string, Record<string, ModelMetric>>;
+  cost_bps?: number;
+  labels: Record<string, Record<string, ModelMetric | WalkForwardMetric>>;
 }
 
 export interface PipelineStep {

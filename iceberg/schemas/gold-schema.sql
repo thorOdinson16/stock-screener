@@ -43,26 +43,29 @@ TBLPROPERTIES (
 );
 
 -- Reproducible, point-in-time training set built by spark/jobs/build_training.py.
--- Stores features, both forward-return labels, the two benchmark returns, and the
--- train/embargo/test assignment. Kept in Iceberg so experiments are replayable
--- via time travel (docs/project-spec.md §10, §26).
+-- `industry` enables sector views; the feature columns are the scale-free,
+-- cross-sectionally normalized features from ml/feature_engineering/transform.py
+-- (MODEL_FEATURES); `fwd_ret_*` are raw returns kept for reporting, while the
+-- model targets are the excess-return labels `excess_ret_*`. The two benchmark
+-- returns and the train/embargo/test assignment are included.
+-- NOTE: build_training.py recreates this table automatically if its schema
+-- changes (it is fully derived).
 CREATE TABLE IF NOT EXISTS ml.training_dataset (
   symbol STRING NOT NULL,
   trade_date DATE NOT NULL,
+  industry STRING,
 
   close DOUBLE,
   volume BIGINT,
 
-  sma_20 DOUBLE,
-  sma_50 DOUBLE,
-  sma_200 DOUBLE,
-  ema_12 DOUBLE,
-  ema_26 DOUBLE,
+  close_over_sma_200 DOUBLE,
+  sma_50_over_sma_200 DOUBLE,
+  sma_20_over_sma_50 DOUBLE,
+  ema_12_over_ema_26 DOUBLE,
+  macd_over_sma_50 DOUBLE,
+  macd_signal_over_sma_50 DOUBLE,
   rsi_14 DOUBLE,
-  macd DOUBLE,
-  macd_signal DOUBLE,
   volatility_20d DOUBLE,
-  volume_avg_20d DOUBLE,
   volume_ratio DOUBLE,
   distance_from_52w_high DOUBLE,
   distance_from_52w_low DOUBLE,
@@ -72,6 +75,8 @@ CREATE TABLE IF NOT EXISTS ml.training_dataset (
 
   fwd_ret_5d DOUBLE,
   fwd_ret_21d DOUBLE,
+  excess_ret_5d DOUBLE,
+  excess_ret_21d DOUBLE,
 
   universe_ret_5d DOUBLE,
   universe_ret_21d DOUBLE,
