@@ -106,11 +106,11 @@ def build_spark(warehouse: str) -> SparkSession:
 
 def estimator(algo: str, params: dict):
     algo = base_algo(algo)
-    common = {"featuresCol": "features", "labelCol": "label", "predictionCol": "prediction", "seed": 42}
+    common = {"featuresCol": "features", "labelCol": "label", "predictionCol": "prediction"}
     if algo == "gbt":
-        return GBTRegressor(stepSize=0.05, **params, **common)
+        return GBTRegressor(stepSize=0.05, seed=42, **params, **common)
     if algo == "rf":
-        return RandomForestRegressor(**params, **common)
+        return RandomForestRegressor(seed=42, **params, **common)
     if algo == "linear":
         return LinearRegression(elasticNetParam=0.0, **params, **common)
     raise ValueError(f"unknown algo: {algo}")
@@ -160,7 +160,7 @@ def feature_attribution(fitted, algo: str) -> dict:
 
 def tune(algo: str, fit_df, val_df):
     evaluator = RegressionEvaluator(
-        featuresCol="features", labelCol="label", predictionCol="prediction", metricName="rmse"
+        labelCol="label", predictionCol="prediction", metricName="rmse"
     )
     best_params, best_rmse = None, None
     for params in GRIDS[base_algo(algo)]:

@@ -279,9 +279,11 @@ def fold_metrics(dataset, label, members, k, cost_bps, mode="walk_forward", n_tr
     universe_col, index_col = f"universe_ret_{horizon}d", f"index_ret_{horizon}d"
     rank_col = f"{label}_rank"
     try:
+        # Only dates whose features are fully populated (excludes the ~200-day
+        # rolling warm-up), otherwise the earliest fold's training set is empty.
+        valid = dataset.dropna(subset=MODEL_FEATURES).select("trade_date").distinct()
         dates = [
-            row["trade_date"]
-            for row in dataset.select("trade_date").distinct().orderBy("trade_date").collect()
+            row["trade_date"] for row in valid.orderBy("trade_date").collect()
         ]
 
         def fit_predict(train_dates, test_dates):
@@ -320,7 +322,7 @@ def fold_metrics(dataset, label, members, k, cost_bps, mode="walk_forward", n_tr
             )
             return joined.select(
                 "symbol", "trade_date", "industry",
-                F.col(label).alias("label"), raw, universe_col, index_col, "score",
+                F.col(label).alias(label), raw, universe_col, index_col, "score",
             ).toPandas()
 
         folds = (
@@ -402,7 +404,7 @@ def main():
         universe_col, index_col = f"universe_ret_{horizon}d", f"index_ret_{horizon}d"
 
         test = dataset.filter(F.col("split") == "test").select(
-            *MODEL_FEATURES, "close", F.col(label).alias(label), "symbol",
+            *MODEL_FEATURES, "close", F.col(label).alias(label), raw, "symbol",
             "trade_date", "industry", universe_col, index_col,
         )
         assembler = VectorAssembler(
