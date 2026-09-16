@@ -1,0 +1,48 @@
+{
+  "recorded_at": "2026-09-16T08:36:53.313138+00:00",
+  "schema_evolution": {
+    "columns_before": [
+      "trade_date",
+      "label",
+      "rank",
+      "symbol",
+      "score",
+      "model_name",
+      "scored_at"
+    ],
+    "columns_after": [
+      "trade_date",
+      "label",
+      "rank",
+      "symbol",
+      "score",
+      "model_name",
+      "scored_at",
+      "bench_note"
+    ],
+    "added_column": "bench_note",
+    "rows_before": 80,
+    "old_data_still_readable": true
+  },
+  "time_travel": {
+    "n_snapshots": 1,
+    "version_as_of": 80,
+    "timestamp_as_of": 80
+  },
+  "compaction": {
+    "files_before": 1,
+    "files_after": 1
+  },
+  "partition_evolution": {
+    "partitions_before": [
+      "Row(trade_date_month=672)",
+      "Row(trade_date_month=673)"
+    ],
+    "partitions_after": [
+      "Row(trade_date_month=672)",
+      "Row(trade_date_month=673)",
+      "Row(trade_date_month=673)"
+    ],
+    "row_count": 3
+  }
+}

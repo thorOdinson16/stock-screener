@@ -1,0 +1,48 @@
+{
+  "recorded_at": "2026-09-16T08:39:53.386970+00:00",
+  "git_commit": "8c784f082f9129d96f91667cf452c392ac7b3cdd",
+  "universe_size": 50,
+  "config": {
+    "full": false,
+    "limit": 50
+  },
+  "total_seconds": 151.383,
+  "stages": [
+    {
+      "stage": "preflight",
+      "seconds": 0.0484797939998316,
+      "returncode": 0
+    },
+    {
+      "stage": "poll",
+      "seconds": 50.840910267000254,
+      "returncode": 0
+    },
+    {
+      "stage": "ingest",
+      "seconds": 7.120204019000084,
+      "returncode": 0
+    },
+    {
+      "stage": "indicators",
+      "seconds": 25.557313225000144,
+      "returncode": 0
+    },
+    {
+      "stage": "score",
+      "seconds": 42.898211077999804,
+      "returncode": 0
+    },
+    {
+      "stage": "serving",
+      "seconds": 24.663926629999878,
+      "returncode": 0
+    },
+    {
+      "stage": "wait_druid",
+      "seconds": 0.2501719410001897,
+      "returncode": 0
+    }
+  ],
+  "poll_symbols_per_sec": 0.983
+}

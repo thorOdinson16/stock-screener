@@ -1,0 +1,217 @@
+{
+  "recorded_at": "2026-09-16T08:37:17.010531+00:00",
+  "git_commit": "8c784f082f9129d96f91667cf452c392ac7b3cdd",
+  "evaluated_at": "2026-09-16T08:29:55.870847+00:00",
+  "k": 20,
+  "cost_bps": 10.0,
+  "n_trials": 12,
+  "summary": {
+    "evaluated_at": "2026-09-16T08:29:55.870847+00:00",
+    "k": 20,
+    "cost_bps": 10.0,
+    "labels": {
+      "excess_ret_5d": {
+        "selected": {
+          "model_name": "gbt_rank",
+          "path": "file:///home/abhi/Documents/stock-screening-platform/ml/models/gbt_rank_excess_ret_5d_20260916082233",
+          "version": "gbt_rank_excess_ret_5d_20260916082233"
+        },
+        "walk_forward": {
+          "mode": "walk_forward",
+          "n_periods": 287466,
+          "ic_mean": 0.010037360594620683,
+          "ic_t_stat": 1.3855499798255797,
+          "ic_p_value": 0.16588436100785717,
+          "net_sharpe": 0.5555350224491539,
+          "net_annualized_return": 0.07326395231966853
+        },
+        "purged_kfold": null,
+        "models": [
+          {
+            "model": "rule_baseline",
+            "ic_mean": 0.013679793024322527,
+            "ic_t_stat": 1.1430737506403625,
+            "sector_neutral_ic_mean": 0.00525596133142891,
+            "net_sharpe": -0.6688691622506732,
+            "net_annualized_return": -0.11268008401892937,
+            "net_max_drawdown": -0.2559362100055331,
+            "avg_turnover": 1.8278487583702558,
+            "deflated_sharpe": 1.176747640912658e-33
+          },
+          {
+            "model": "gbt",
+            "ic_mean": 0.00629387233848788,
+            "ic_t_stat": 0.5266995166479282,
+            "sector_neutral_ic_mean": 0.009592055218300491,
+            "net_sharpe": -0.9159120512983275,
+            "net_annualized_return": -0.11308336739541058,
+            "net_max_drawdown": -0.14274834695306104,
+            "avg_turnover": 1.3611795899251482,
+            "deflated_sharpe": 6.667363454807432e-32
+          },
+          {
+            "model": "rf",
+            "ic_mean": -0.0003114750905637744,
+            "ic_t_stat": -0.02366869029583842,
+            "sector_neutral_ic_mean": 0.0016494956369753563,
+            "net_sharpe": -2.100825851338941,
+            "net_annualized_return": -0.23808470718201702,
+            "net_max_drawdown": -0.2165275056552498,
+            "avg_turnover": 1.2836684273189023,
+            "deflated_sharpe": 7.46352169858981e-37
+          },
+          {
+            "model": "linear",
+            "ic_mean": 0.012824763963758468,
+            "ic_t_stat": 1.010049220707627,
+            "sector_neutral_ic_mean": 0.009779823619985606,
+            "net_sharpe": 0.3534034398939715,
+            "net_annualized_return": 0.04355904147801337,
+            "net_max_drawdown": -0.11862671496925614,
+            "avg_turnover": 0.9193170127559417,
+            "deflated_sharpe": 5.961832390061359e-30
+          },
+          {
+            "model": "gbt_rank",
+            "ic_mean": 0.02757233443580958,
+            "ic_t_stat": 3.235371079333796,
+            "sector_neutral_ic_mean": 0.029946537592456742,
+            "net_sharpe": 1.1957929224210426,
+            "net_annualized_return": 0.14205764817367195,
+            "net_max_drawdown": -0.08323277616094327,
+            "avg_turnover": 1.642371426238676,
+            "deflated_sharpe": 5.993350216642832e-24
+          },
+          {
+            "model": "rf_rank",
+            "ic_mean": 0.027255668635693602,
+            "ic_t_stat": 2.880149543894418,
+            "sector_neutral_ic_mean": 0.031343974129560775,
+            "net_sharpe": 0.9855922574626438,
+            "net_annualized_return": 0.1513547492313616,
+            "net_max_drawdown": -0.09936511377223955,
+            "avg_turnover": 1.4683373103466388,
+            "deflated_sharpe": 1.003091410744626e-24
+          },
+          {
+            "model": "rank_ensemble",
+            "ic_mean": 0.027544420930650144,
+            "ic_t_stat": 2.9650803187452324,
+            "sector_neutral_ic_mean": 0.03107377400235505,
+            "net_sharpe": 0.9527470776054564,
+            "net_annualized_return": 0.1392667119153035,
+            "net_max_drawdown": -0.10451188158677949,
+            "avg_turnover": 1.5742622468089074,
+            "deflated_sharpe": 4.543199232049063e-24
+          }
+        ]
+      },
+      "excess_ret_21d": {
+        "selected": {
+          "model_name": "rank_ensemble",
+          "members": [
+            {
+              "model_name": "gbt_rank",
+              "path": "file:///home/abhi/Documents/stock-screening-platform/ml/models/gbt_rank_excess_ret_21d_20260916082233",
+              "base_algo": "gbt"
+            },
+            {
+              "model_name": "rf_rank",
+              "path": "file:///home/abhi/Documents/stock-screening-platform/ml/models/rf_rank_excess_ret_21d_20260916082233",
+              "base_algo": "rf"
+            }
+          ]
+        },
+        "walk_forward": {
+          "mode": "walk_forward",
+          "n_periods": 287466,
+          "ic_mean": 0.007016433629390894,
+          "ic_t_stat": 0.3917865783032928,
+          "ic_p_value": 0.695215912853169,
+          "net_sharpe": 0.7993914447843472,
+          "net_annualized_return": 0.1425762369999759
+        },
+        "purged_kfold": null,
+        "models": [
+          {
+            "model": "rule_baseline",
+            "ic_mean": 0.036795843854726916,
+            "ic_t_stat": 2.0470127493515657,
+            "sector_neutral_ic_mean": 0.02675434130740501,
+            "net_sharpe": -0.5348086656478113,
+            "net_annualized_return": -0.040315078088288714,
+            "net_max_drawdown": -0.0933028149016325,
+            "avg_turnover": 1.914435809172651,
+            "deflated_sharpe": 1.153473365753651e-07
+          },
+          {
+            "model": "gbt",
+            "ic_mean": 0.030021813173554155,
+            "ic_t_stat": 1.4403167214474941,
+            "sector_neutral_ic_mean": 0.030172686765257407,
+            "net_sharpe": 1.072424534214502,
+            "net_annualized_return": 0.17321226999494033,
+            "net_max_drawdown": -0.08515097136972416,
+            "avg_turnover": 1.8542593527113647,
+            "deflated_sharpe": 0.00012115160017914332
+          },
+          {
+            "model": "rf",
+            "ic_mean": 0.027526181219810368,
+            "ic_t_stat": 1.12665016261216,
+            "sector_neutral_ic_mean": 0.028803457174655222,
+            "net_sharpe": -0.08243102231233483,
+            "net_annualized_return": -0.02206444082101322,
+            "net_max_drawdown": -0.07479005956968643,
+            "avg_turnover": 1.8106782660680778,
+            "deflated_sharpe": 4.5454266654625876e-08
+          },
+          {
+            "model": "linear",
+            "ic_mean": 0.029978027904321164,
+            "ic_t_stat": 1.6687250925004182,
+            "sector_neutral_ic_mean": 0.031232986944926402,
+            "net_sharpe": 1.0253970764179567,
+            "net_annualized_return": 0.17928910812432908,
+            "net_max_drawdown": -0.07877905987995115,
+            "avg_turnover": 1.6916340273929953,
+            "deflated_sharpe": 1.5908901016616973e-05
+          },
+          {
+            "model": "gbt_rank",
+            "ic_mean": 0.05478227089485479,
+            "ic_t_stat": 4.190086589622961,
+            "sector_neutral_ic_mean": 0.04728061454445638,
+            "net_sharpe": 1.3038061397653182,
+            "net_annualized_return": 0.13600181764455965,
+            "net_max_drawdown": -0.0571818182753524,
+            "avg_turnover": 1.8305131958382732,
+            "deflated_sharpe": 4.889497352782503e-05
+          },
+          {
+            "model": "rf_rank",
+            "ic_mean": 0.05672750932576292,
+            "ic_t_stat": 3.7293321580591683,
+            "sector_neutral_ic_mean": 0.05107669958239787,
+            "net_sharpe": 0.10290744909531377,
+            "net_annualized_return": 0.005200397880224195,
+            "net_max_drawdown": -0.10075240896255866,
+            "avg_turnover": 1.817665707266045,
+            "deflated_sharpe": 2.4283079736780255e-07
+          },
+          {
+            "model": "rank_ensemble",
+            "ic_mean": 0.058026590556646,
+            "ic_t_stat": 4.137768690184571,
+            "sector_neutral_ic_mean": 0.05032620824588863,
+            "net_sharpe": 1.3258155275937,
+            "net_annualized_return": 0.15547378932756284,
+            "net_max_drawdown": -0.04810808447723125,
+            "avg_turnover": 1.8039894364127407,
+            "deflated_sharpe": 0.00024464870133717413
+          }
+        ]
+      }
+    }
+  }
+}

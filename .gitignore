@@ -34,13 +34,15 @@ ml/models/*
 !ml/models/.gitkeep
 ml/evaluation/results/
 
-# Generated benchmark + monitoring artifacts (scripts are tracked)
-benchmarks/throughput/
-benchmarks/latency/
-benchmarks/model/
-benchmarks/recovery/
-benchmarks/scalability/
-benchmarks/iceberg/
+# Benchmark artifacts: scripts + curated final results are tracked; raw run
+# logs, timestamped runs and pycache are not.
+benchmarks/**/logs/
+benchmarks/**/__pycache__/
+benchmarks/latency/latency_*.json
+benchmarks/recovery/recovery_*.json
+benchmarks/scalability/*.json
+
+# Monitoring snapshots are operational output (not committed)
 monitoring/metrics/
 monitoring/quality/
 
