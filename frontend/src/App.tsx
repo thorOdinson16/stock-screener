@@ -5,6 +5,7 @@ import TopPicks from "./pages/TopPicks";
 import Screener from "./pages/Screener";
 import StockDetail from "./pages/StockDetail";
 import Model from "./pages/Model";
+import Ops from "./pages/Ops";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="screener" element={<Screener />} />
         <Route path="stocks/:symbol" element={<StockDetail />} />
         <Route path="model" element={<Model />} />
+        <Route path="ops" element={<Ops />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

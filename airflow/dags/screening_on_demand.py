@@ -38,5 +38,11 @@ with DAG(
         pool=POOL,
         execution_timeout=timedelta(minutes=10),
     )
+    collect_metrics = BashOperator(
+        task_id="collect_metrics",
+        bash_command=step("collect_metrics.sh"),
+        pool=POOL,
+        execution_timeout=timedelta(minutes=5),
+    )
 
-    preflight >> poll >> ingest >> indicators >> score >> serve >> wait_druid
+    preflight >> poll >> ingest >> indicators >> score >> serve >> wait_druid >> collect_metrics

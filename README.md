@@ -91,8 +91,10 @@ Overlapping runs are prevented by a 1-slot `screening` pool.
 
 Pages: **Dashboard** (breadth, gainers/losers, sector performance), **Top Picks** (5d/21d),
 **Screener** (filter by industry/score/P-E/RSI/momentum; CSV export), **Stock Detail**
-(price + SMA overlays, RSI, MACD, fundamentals), **Model** (IC / Precision@K / turnover vs the
-rule baseline). Manual refresh by default; toggle 30s auto-refresh in the sidebar.
+(price + SMA overlays, RSI, MACD, fundamentals), **Model** (IC + Newey–West t-stat,
+sector-neutral IC, net-of-cost Sharpe vs the rule baseline), **Ops** (Kafka lag, Druid
+segments/latency, HDFS health, pipeline runs). Manual refresh by default; toggle 30s
+auto-refresh in the sidebar.
 
 See `setup.md` for the full ingestion + ML runbook.
 
@@ -136,10 +138,12 @@ docs/             Project specification and design notes
 - [x] Dead-letter routing (SeaTunnel validation -> `market.deadletter`)
 - [x] Iceberg maintenance (compaction, manifest rewrite, snapshot expiry)
 - [x] ML methodology overhaul (shared scale-free/cross-sectional transforms, excess-return
-      labels, walk-forward IC + Newey–West, cost-aware long/short backtest, `ml/experiments/`
-      registry) — results pending the 5y backfill
+      labels, walk-forward/purged K-fold IC + Newey–West, cost-aware long/short backtest,
+      rank ensemble, `ml/experiments/` registry) — results pending the 5y backfill
+- [x] Experiments suite under `benchmarks/` (throughput, latency, model, recovery, Iceberg,
+      scalability) — run with the stack up
+- [x] Observability (`monitoring/collect_metrics.py` + `/api/ops` + Ops page)
 - [ ] Spark Structured Streaming (near-real-time indicators)
-- [ ] Experiments (throughput, latency, fault recovery, Iceberg, scalability, model performance)
 
 ## Notes / limitations
 

@@ -34,6 +34,15 @@ ml/models/*
 !ml/models/.gitkeep
 ml/evaluation/results/
 
+# Generated benchmark + monitoring artifacts (scripts are tracked)
+benchmarks/throughput/
+benchmarks/latency/
+benchmarks/model/
+benchmarks/recovery/
+benchmarks/scalability/
+benchmarks/iceberg/
+monitoring/metrics/
+
 # Local secrets
 config/airflow.env
 runtime/

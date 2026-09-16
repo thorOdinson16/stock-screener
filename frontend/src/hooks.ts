@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./api";
 import { useRefetchInterval } from "./settings";
-import type { PipelineRun, RunOptions } from "./types";
+import type { OpsSnapshot, PipelineRun, RunOptions } from "./types";
 
 export function useApi<T>(key: unknown[], path: string, enabled = true) {
   const refetchInterval = useRefetchInterval();
@@ -44,5 +44,13 @@ export function useRunMaintenance() {
   return useMutation({
     mutationFn: () => apiPost<PipelineRun>("/pipeline/maintenance", {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pipeline-status"] }),
+  });
+}
+
+export function useCollectOps() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<OpsSnapshot>("/ops/collect", {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ops"] }),
   });
 }

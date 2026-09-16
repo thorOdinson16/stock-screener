@@ -17,6 +17,8 @@ Endpoints:
 
 import json
 import os
+import subprocess
+import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -32,6 +34,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _COMPARISON_PATH = os.path.join(
     _REPO_ROOT, "ml", "evaluation", "results", "comparison.json"
 )
+_OPS_DIR = os.path.join(_REPO_ROOT, "monitoring", "metrics")
 
 DATASOURCES = ["screener", "price_history", "stock_scores", "market_quotes"]
 
@@ -259,6 +262,31 @@ def model_comparison():
         raise HTTPException(status_code=404, detail="comparison.json not found — run evaluate.py")
     with open(_COMPARISON_PATH) as fh:
         return json.load(fh)
+
+
+@app.get("/api/ops")
+def ops():
+    """Latest operational snapshot written by monitoring/collect_metrics.py."""
+    if not os.path.isdir(_OPS_DIR):
+        raise HTTPException(status_code=404, detail="No ops snapshots yet — run monitoring/collect_metrics.py")
+    files = sorted(
+        f for f in os.listdir(_OPS_DIR) if f.endswith(".json") and f != "index.json"
+    )
+    if not files:
+        raise HTTPException(status_code=404, detail="No ops snapshots yet")
+    with open(os.path.join(_OPS_DIR, files[-1])) as fh:
+        return json.load(fh)
+
+
+@app.post("/api/ops/collect")
+def ops_collect():
+    """Runs the metrics collector on demand and returns the fresh snapshot."""
+    script = os.path.join(_REPO_ROOT, "monitoring", "collect_metrics.py")
+    try:
+        subprocess.run([sys.executable, script], cwd=_REPO_ROOT, check=True, timeout=180)
+    except subprocess.SubprocessError as e:
+        raise HTTPException(status_code=502, detail=f"collector failed: {e}") from e
+    return ops()
 
 
 @app.get("/api/universe")

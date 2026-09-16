@@ -149,3 +149,24 @@ export interface RunOptions {
   universe_limit?: number | null;
   publish_history: boolean;
 }
+
+export interface OpsSnapshot {
+  collected_at: string;
+  kafka: { total_lag?: number; returncode?: number; error?: string };
+  druid: {
+    segments?: Record<string, number>;
+    screener_latest?: string | null;
+    segment_query_latency_ms?: number;
+    query_latency_ms?: number;
+    error?: string;
+  };
+  hdfs: {
+    capacity_bytes?: number | null;
+    used_bytes?: number | null;
+    remaining_bytes?: number | null;
+    live_datanodes?: number | null;
+    dead_datanodes?: number | null;
+    error?: string;
+  };
+  airflow: Record<string, { state?: string; end_date?: string | null } | null> | { error?: string };
+}

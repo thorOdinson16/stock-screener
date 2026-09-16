@@ -27,7 +27,8 @@ DAG_RETRAIN = "screening_retrain"
 DAG_MAINTENANCE = "screening_maintenance"
 
 # UI step order per DAG.
-ON_DEMAND_STEPS = ["preflight", "poll", "ingest", "indicators", "score", "serve", "wait_for_druid"]
+ON_DEMAND_STEPS = ["preflight", "poll", "ingest", "indicators", "score", "serve",
+                   "wait_for_druid", "collect_metrics"]
 RETRAIN_STEPS = ["retrain"]
 MAINTENANCE_STEPS = ["maintenance"]
 

@@ -6,6 +6,7 @@ const NAV = [
   { to: "/picks", label: "Top Picks", icon: "★" },
   { to: "/screener", label: "Screener", icon: "⚲" },
   { to: "/model", label: "Model", icon: "◈" },
+  { to: "/ops", label: "Ops", icon: "⚙" },
 ];
 
 export default function Layout() {

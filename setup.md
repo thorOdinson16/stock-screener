@@ -401,9 +401,9 @@ run `poller/poller.py --once` to repopulate it. The dashboard does not depend on
 - Dashboard  http://localhost:5173
 - API docs   http://localhost:8000/docs
 
-Pages: market overview, top picks, screener, stock detail, model evaluation.
-Manual refresh by default; toggle 30s auto-refresh in the sidebar. Stop with
-`./stop-ui.sh`.
+Pages: market overview, top picks, screener, stock detail, model evaluation
+(IC / Newey–West t-stat / net-of-cost Sharpe), and Ops. Manual refresh by
+default; toggle 30s auto-refresh in the sidebar. Stop with `./stop-ui.sh`.
 
 ### On-demand pipeline (button / Airflow)
 
@@ -427,6 +427,35 @@ Run a pipeline without the UI (debugging):
 
 ```bash
 scripts/run_once.sh --full --history       # or: scripts/run_once.sh --limit 20
+```
+
+### Observability
+
+Snapshots Kafka consumer lag, Druid segments/latency, HDFS capacity and the
+latest Airflow run state to `monitoring/metrics/`. The on-demand DAG runs it
+after each successful pipeline (`collect_metrics`), or run it directly:
+
+```bash
+python3 monitoring/collect_metrics.py
+```
+
+The dashboard **Ops** page reads the latest snapshot via `GET /api/ops`;
+**Collect now** triggers a fresh snapshot (`POST /api/ops/collect`).
+
+### Benchmarks
+
+Reproducible experiments under `benchmarks/` (each records the git commit and
+config, and writes JSON + a markdown summary):
+
+```bash
+python benchmarks/throughput.py --sizes 50 200 500   # exp 1
+python benchmarks/latency.py --repeat 3               # exp 2
+python benchmarks/model.py --run                      # exp 3 (Phase 1 stack)
+python benchmarks/recovery.py --component kafka \
+    --kill-cmd "..." --start-cmd "..."                # exp 4
+spark-submit --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+    benchmarks/iceberg.py                              # exp 5
+python benchmarks/scalability.py --masters "local[4]" "local[8]" --limit 100  # exp 6
 ```
 
 ### Iceberg maintenance
