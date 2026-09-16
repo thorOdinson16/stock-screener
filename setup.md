@@ -316,7 +316,8 @@ Scores every model and the interpretable rule baseline (spec §13) on the `test`
 split, reporting Information Coefficient with a Newey–West t-stat, a
 sector-neutral IC view, Precision@K (vs both benchmarks), and a non-overlapping
 long/short backtest net of 10 bps/side. The selected model is chosen by net
-Sharpe, and a walk-forward check is run for it:
+Sharpe, a walk-forward check is run for it (`--purged-kfold` adds a purged
+K-fold check), and a deflated Sharpe corrects for the number of trials:
 
 ```bash
 spark-submit \

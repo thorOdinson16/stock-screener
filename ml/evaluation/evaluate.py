@@ -56,7 +56,11 @@ from metrics import (  # noqa: E402
     turnover,
 )
 from backtest import DEFAULT_COST_BPS, backtest  # noqa: E402
-from walk_forward import run_walk_forward  # noqa: E402
+from walk_forward import (  # noqa: E402
+    expanding_folds,
+    purged_kfold_folds,
+    run_folds,
+)
 from rules import rule_score  # noqa: E402
 from registry import record as record_experiment  # noqa: E402
 from train_model import estimator  # noqa: E402
@@ -73,6 +77,9 @@ MODEL_LOADERS = {
 }
 
 ENSEMBLE_NAME = "rank_ensemble"
+
+# Non-model keys inside results["labels"][label] (filled after selection).
+FOLD_KEYS = {"walk_forward", "purged_kfold"}
 
 
 def load_model(meta):
@@ -130,7 +137,7 @@ def sector_neutral_ic(pdf, score_col, label_col, lags):
 
 
 def evaluate_scores(pdf, score_col, label_col, raw_col, universe_col, index_col,
-                    k, horizon, cost_bps):
+                    k, horizon, cost_bps, n_trials=1):
     ic = information_coefficient(pdf, score_col, label_col, lags=horizon - 1)
     neutral = sector_neutral_ic(pdf, score_col, label_col, lags=horizon - 1)
     top = top_k_forward_returns(pdf, score_col, raw_col, k=k)
@@ -154,6 +161,7 @@ def evaluate_scores(pdf, score_col, label_col, raw_col, universe_col, index_col,
             pdf, horizon, k=k, cost_bps=cost_bps, long_short=True,
             ret_col=raw_col, score_col=score_col,
             universe_ret_col=universe_col, index_ret_col=index_col,
+            n_trials=n_trials,
         ),
     }
 
@@ -250,7 +258,22 @@ def rule_inputs(spark: SparkSession):
     )
 
 
-def walk_forward_metrics(dataset, label, members, k, cost_bps):
+def training_snapshot_id(spark: SparkSession):
+    """Latest Iceberg snapshot id of the training dataset, for time-travel
+    reproducibility of the recorded experiment."""
+    try:
+        row = spark.sql(
+            "SELECT snapshot_id FROM iceberg.ml.training_dataset.snapshots "
+            "ORDER BY committed_at DESC LIMIT 1"
+        ).first()
+        return str(row["snapshot_id"]) if row else None
+    except Exception:  # noqa: BLE001 — metadata may be unavailable
+        return None
+
+
+def fold_metrics(dataset, label, members, k, cost_bps, mode="walk_forward", n_trials=1):
+    """Out-of-sample metrics from expanding-window walk-forward or purged
+    K-fold folds."""
     horizon = horizon_of(label)
     raw = raw_label(label)
     universe_col, index_col = f"universe_ret_{horizon}d", f"index_ret_{horizon}d"
@@ -300,16 +323,23 @@ def walk_forward_metrics(dataset, label, members, k, cost_bps):
                 F.col(label).alias("label"), raw, universe_col, index_col, "score",
             ).toPandas()
 
-        wf = run_walk_forward(dates, fit_predict)
+        folds = (
+            purged_kfold_folds(dates)
+            if mode == "purged_kfold"
+            else expanding_folds(dates)
+        )
+        wf = run_folds(dates, fit_predict, folds)
         if wf.empty:
-            return {"n_periods": 0}
+            return {"mode": mode, "n_periods": 0}
         ic = information_coefficient(wf, "score", label, lags=horizon - 1)
         bt = backtest(
             wf, horizon, k=k, cost_bps=cost_bps, long_short=True,
             ret_col=raw, score_col="score",
             universe_ret_col=universe_col, index_ret_col=index_col,
+            n_trials=n_trials,
         )
         return {
+            "mode": mode,
             "n_periods": int(len(wf)),
             "ic_mean": ic["ic_mean"],
             "ic_t_stat": ic["ic_t_stat"],
@@ -317,9 +347,9 @@ def walk_forward_metrics(dataset, label, members, k, cost_bps):
             "net_sharpe": bt.get("net_sharpe"),
             "net_annualized_return": bt.get("net_annualized_return"),
         }
-    except Exception as e:  # noqa: BLE001 — walk-forward is best-effort
-        print(f"walk-forward for {label}/{algo} skipped: {e}")
-        return {"error": str(e)}
+    except Exception as e:  # noqa: BLE001 — fold evaluation is best-effort
+        print(f"{mode} for {label} skipped: {e}")
+        return {"mode": mode, "error": str(e)}
 
 
 def main():
@@ -336,6 +366,10 @@ def main():
         help="Fraction of trading dates a symbol must appear on for the "
              "full-history robustness run.",
     )
+    parser.add_argument(
+        "--purged-kfold", action="store_true",
+        help="Also run a purged K-fold evaluation alongside walk-forward.",
+    )
     args = parser.parse_args()
 
     registry_path = os.path.join(args.models_dir, "registry.json")
@@ -350,7 +384,13 @@ def main():
     os.makedirs(args.results_dir, exist_ok=True)
     now = datetime.now(timezone.utc).isoformat()
 
-    results = {"evaluated_at": now, "k": args.k, "cost_bps": args.cost_bps, "labels": {}}
+    # Multiple-testing denominator: every model (plus the ensemble) on every label.
+    n_trials = sum(len(models) + 1 for models in registry["labels"].values())
+
+    results = {
+        "evaluated_at": now, "k": args.k, "cost_bps": args.cost_bps,
+        "n_trials": n_trials, "labels": {},
+    }
     selected = {"selected_at": now, "labels": {}}
     robustness = {}
     hf_symbols = full_history_symbols(dataset, args.coverage_threshold)
@@ -381,7 +421,7 @@ def main():
         baseline_pdf["prediction"] = rule_score(baseline_pdf)
         label_results["rule_baseline"] = evaluate_scores(
             baseline_pdf, "prediction", label, raw, universe_col, index_col,
-            args.k, horizon, args.cost_bps,
+            args.k, horizon, args.cost_bps, n_trials,
         )
 
         for algo, meta in models.items():
@@ -390,7 +430,7 @@ def main():
             )
             label_results[algo] = evaluate_scores(
                 preds.toPandas(), "prediction", label, raw, universe_col, index_col,
-                args.k, horizon, args.cost_bps,
+                args.k, horizon, args.cost_bps, n_trials,
             )
 
         if "gbt_rank" in models and "rf_rank" in models:
@@ -399,7 +439,7 @@ def main():
                     models, test_prepared, test, label, raw, universe_col, index_col
                 ).toPandas(),
                 "prediction", label, raw, universe_col, index_col,
-                args.k, horizon, args.cost_bps,
+                args.k, horizon, args.cost_bps, n_trials,
             )
 
         candidates = list(models.keys()) + (
@@ -410,9 +450,15 @@ def main():
             members = selected_members(best, models)
             selected["labels"][label] = selected_entry(best, models)
             if not args.skip_walk_forward:
-                label_results["walk_forward"] = walk_forward_metrics(
+                label_results["walk_forward"] = fold_metrics(
                     dataset, label, members, args.k, args.cost_bps,
+                    mode="walk_forward", n_trials=n_trials,
                 )
+                if args.purged_kfold:
+                    label_results["purged_kfold"] = fold_metrics(
+                        dataset, label, members, args.k, args.cost_bps,
+                        mode="purged_kfold", n_trials=n_trials,
+                    )
             if hf_symbols:
                 hf_test = test_prepared.filter(F.col("symbol").isin(hf_symbols))
                 if best == ENSEMBLE_NAME:
@@ -432,13 +478,14 @@ def main():
                     **evaluate_scores(
                         hf_preds.toPandas(), "prediction", label, raw,
                         universe_col, index_col, args.k, horizon, args.cost_bps,
+                        n_trials,
                     ),
                 }
 
         results["labels"][label] = label_results
         print(f"{label}: selected {best}; " + ", ".join(
             f"{name} IC={m.get('ic_mean')}" for name, m in label_results.items()
-            if name != "walk_forward"
+            if name not in FOLD_KEYS
         ))
 
     if robustness:
@@ -455,8 +502,9 @@ def main():
     _write_markdown(results, os.path.join(args.results_dir, "comparison.md"))
     record_experiment(
         "evaluate",
-        {"k": args.k, "cost_bps": args.cost_bps, "selected": _clean(selected),
-         "results": _clean(results)},
+        {"k": args.k, "cost_bps": args.cost_bps, "n_trials": n_trials,
+         "training_snapshot_id": training_snapshot_id(spark),
+         "selected": _clean(selected), "results": _clean(results)},
         _REPO_ROOT,
         args.experiments_dir,
     )
@@ -492,7 +540,7 @@ def _write_markdown(results, path):
         lines.append("| model | " + " | ".join(name for _, name in columns) + " |")
         lines.append("|---|" + "|".join("---" for _ in columns) + "|")
         for model_name, metrics in label_results.items():
-            if model_name == "walk_forward":
+            if model_name in FOLD_KEYS:
                 continue
             cells = []
             for key, _ in columns:
@@ -504,7 +552,7 @@ def _write_markdown(results, path):
         lines.append("| model | net Sharpe | net ann ret | net max DD | gross Sharpe | avg turnover |")
         lines.append("|---|---|---|---|---|---|")
         for model_name, metrics in label_results.items():
-            if model_name == "walk_forward":
+            if model_name in FOLD_KEYS:
                 continue
             bt = metrics.get("backtest") or {}
             lines.append(
@@ -512,14 +560,19 @@ def _write_markdown(results, path):
                 f"{_fmt(bt.get('net_annualized_return'))} | {_fmt(bt.get('net_max_drawdown'))} | "
                 f"{_fmt(bt.get('gross_sharpe'))} | {_fmt(bt.get('avg_turnover'))} |"
             )
-        wf = label_results.get("walk_forward")
-        if wf:
-            lines.append("")
-            lines.append(
-                f"Walk-forward (selected model): {wf.get('n_periods', 0)} periods, "
-                f"IC {_fmt(wf.get('ic_mean'))} (t={_fmt(wf.get('ic_t_stat'))}), "
-                f"net Sharpe {_fmt(wf.get('net_sharpe'))}."
-            )
+        for key, title in (("walk_forward", "Walk-forward"),
+                           ("purged_kfold", "Purged K-fold")):
+            fold = label_results.get(key)
+            if fold:
+                lines.append("")
+                if fold.get("error"):
+                    lines.append(f"{title} (selected model): skipped ({fold['error']}).")
+                else:
+                    lines.append(
+                        f"{title} (selected model): {fold.get('n_periods', 0)} periods, "
+                        f"IC {_fmt(fold.get('ic_mean'))} (t={_fmt(fold.get('ic_t_stat'))}), "
+                        f"net Sharpe {_fmt(fold.get('net_sharpe'))}."
+                    )
         lines.append("")
 
     if results.get("robustness"):

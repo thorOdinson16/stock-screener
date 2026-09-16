@@ -43,7 +43,7 @@ from transform import (  # noqa: E402
     apply_cross_sectional,
     transform_group,
 )
-from walk_forward import expanding_folds  # noqa: E402
+from walk_forward import expanding_folds, purged_kfold_folds  # noqa: E402
 from backtest import backtest  # noqa: E402
 from asof import asof_join_fundamentals  # noqa: E402
 
@@ -254,6 +254,17 @@ def test_walk_forward_embargo_and_expanding():
         assert min(fold["test_dates"]) - max(fold["train_dates"]) >= 21
         assert len(fold["train_dates"]) > prev_train  # expanding
         prev_train = len(fold["train_dates"])
+
+
+def test_purged_kfold_disjoint_and_purged():
+    embargo = 5
+    folds = purged_kfold_folds(list(range(100)), n_folds=5, embargo_days=embargo)
+    assert folds
+    for fold in folds:
+        train, test = set(fold["train_dates"]), set(fold["test_dates"])
+        assert not (train & test)
+        lo, hi = min(test) - embargo, max(test) + embargo
+        assert all(d < lo or d > hi for d in train)
 
 
 def test_backtest_cost_math():

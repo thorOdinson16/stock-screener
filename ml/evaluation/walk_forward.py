@@ -55,13 +55,53 @@ def expanding_folds(
     return folds
 
 
-def run_walk_forward(dates, fit_predict, n_folds=DEFAULT_N_FOLDS, **kwargs) -> pd.DataFrame:
+def purged_kfold_folds(
+    sorted_dates,
+    n_folds: int = DEFAULT_N_FOLDS,
+    embargo_days: int = DEFAULT_EMBARGO_DAYS,
+):
+    """Purged K-fold (López de Prado): contiguous test blocks, with training
+    rows whose label window would overlap a test block purged by `embargo_days`
+    on both sides. Unlike walk-forward, training windows may extend after the
+    test block — useful as a complementary, lower-variance estimate."""
+    dates = list(sorted_dates)
+    n = len(dates)
+    if n < 8:
+        return []
+
+    block = max(1, n // n_folds)
+    folds = []
+    for i in range(n_folds):
+        test_start = i * block
+        test_end = n if i == n_folds - 1 else test_start + block
+        if test_end <= test_start:
+            continue
+        train_idx = [
+            j for j in range(n)
+            if not (test_start - embargo_days <= j < test_end + embargo_days)
+        ]
+        if len(train_idx) < 2:
+            continue
+        folds.append(
+            {
+                "train_dates": [dates[j] for j in train_idx],
+                "test_dates": [dates[j] for j in range(test_start, test_end)],
+            }
+        )
+    return folds
+
+
+def run_folds(dates, fit_predict, folds) -> pd.DataFrame:
     """Concatenates the per-fold predictions returned by `fit_predict`."""
     frames = []
-    for fold in expanding_folds(dates, n_folds=n_folds, **kwargs):
+    for fold in folds:
         pdf = fit_predict(fold["train_dates"], fold["test_dates"])
         if pdf is not None and not pdf.empty:
             frames.append(pdf)
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)
+
+
+def run_walk_forward(dates, fit_predict, n_folds=DEFAULT_N_FOLDS, **kwargs) -> pd.DataFrame:
+    return run_folds(dates, fit_predict, expanding_folds(dates, n_folds=n_folds, **kwargs))

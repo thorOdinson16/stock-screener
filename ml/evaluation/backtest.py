@@ -63,6 +63,7 @@ def backtest(
     date_col: str = "trade_date",
     universe_ret_col: str | None = None,
     index_ret_col: str | None = None,
+    n_trials: int = 1,
 ) -> dict:
     ret_col = ret_col or f"fwd_ret_{horizon}d"
     data = df.dropna(subset=[score_col, ret_col])
@@ -121,7 +122,7 @@ def backtest(
     }
     result.update({f"net_{key}": val for key, val in _ann_stats(net, horizon).items()})
     result.update({f"gross_{key}": val for key, val in _ann_stats(gross, horizon).items()})
-    result["deflated_sharpe"] = deflated_sharpe_ratio(net, n_trials=1)["dsr"]
+    result["deflated_sharpe"] = deflated_sharpe_ratio(net, n_trials=n_trials)["dsr"]
 
     if universe_rets:
         result.update(
