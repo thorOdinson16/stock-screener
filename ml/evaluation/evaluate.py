@@ -170,6 +170,20 @@ def select_best(label_results, model_names):
     return max(candidates.items(), key=key)[0]
 
 
+def full_history_symbols(dataset, threshold: float):
+    """Symbols present on at least `threshold` of all trading dates. A
+    robustness run restricted to these mitigates (does not remove) survivorship
+    bias from index additions/removals."""
+    n_dates = dataset.select("trade_date").distinct().count()
+    if n_dates == 0:
+        return []
+    return [
+        row["symbol"]
+        for row in dataset.groupBy("symbol").count().collect()
+        if row["count"] >= threshold * n_dates
+    ]
+
+
 def rule_inputs(spark: SparkSession):
     silver = spark.table("iceberg.silver.quotes_enriched")
     return silver.select(
@@ -241,6 +255,11 @@ def main():
     parser.add_argument("--k", type=int, default=DEFAULT_K)
     parser.add_argument("--cost-bps", type=float, default=DEFAULT_COST_BPS)
     parser.add_argument("--skip-walk-forward", action="store_true")
+    parser.add_argument(
+        "--coverage-threshold", type=float, default=0.9,
+        help="Fraction of trading dates a symbol must appear on for the "
+             "full-history robustness run.",
+    )
     args = parser.parse_args()
 
     registry_path = os.path.join(args.models_dir, "registry.json")
@@ -257,6 +276,9 @@ def main():
 
     results = {"evaluated_at": now, "k": args.k, "cost_bps": args.cost_bps, "labels": {}}
     selected = {"selected_at": now, "labels": {}}
+    robustness = {}
+    hf_symbols = full_history_symbols(dataset, args.coverage_threshold)
+    print(f"full-history symbols (>= {args.coverage_threshold:.0%} of dates): {len(hf_symbols)}")
 
     for label, models in registry["labels"].items():
         horizon = horizon_of(label)
@@ -310,12 +332,33 @@ def main():
                     dataset, label, best, models[best].get("params", {}),
                     args.k, args.cost_bps,
                 )
+            if hf_symbols:
+                hf_model = MODEL_LOADERS[best].load(models[best]["path"])
+                hf_preds = hf_model.transform(
+                    test_prepared.filter(F.col("symbol").isin(hf_symbols))
+                ).select(
+                    "symbol", "trade_date", "industry",
+                    F.col(label).alias(label), F.col(raw), universe_col, index_col,
+                    F.col("prediction"),
+                )
+                robustness[label] = {
+                    "model_name": best,
+                    "coverage_threshold": args.coverage_threshold,
+                    "n_symbols": len(hf_symbols),
+                    **evaluate_scores(
+                        hf_preds.toPandas(), "prediction", label, raw,
+                        universe_col, index_col, args.k, horizon, args.cost_bps,
+                    ),
+                }
 
         results["labels"][label] = label_results
         print(f"{label}: selected {best}; " + ", ".join(
             f"{name} IC={m.get('ic_mean')}" for name, m in label_results.items()
             if name != "walk_forward"
         ))
+
+    if robustness:
+        results["robustness"] = robustness
 
     comparison_path = os.path.join(args.results_dir, "comparison.json")
     with open(comparison_path, "w") as fh:
@@ -392,6 +435,20 @@ def _write_markdown(results, path):
                 f"Walk-forward (selected model): {wf.get('n_periods', 0)} periods, "
                 f"IC {_fmt(wf.get('ic_mean'))} (t={_fmt(wf.get('ic_t_stat'))}), "
                 f"net Sharpe {_fmt(wf.get('net_sharpe'))}."
+            )
+        lines.append("")
+
+    if results.get("robustness"):
+        lines.append("## Robustness: symbols with full history")
+        lines.append("")
+        lines.append("| label | model | symbols | IC | IC t | net Sharpe |")
+        lines.append("|---|---|---|---|---|---|")
+        for label, r in results["robustness"].items():
+            bt = r.get("backtest") or {}
+            lines.append(
+                f"| {label} | {r.get('model_name')} | {r.get('n_symbols')} | "
+                f"{_fmt(r.get('ic_mean'))} | {_fmt(r.get('ic_t_stat'))} | "
+                f"{_fmt(bt.get('net_sharpe'))} |"
             )
         lines.append("")
 

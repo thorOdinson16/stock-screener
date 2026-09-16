@@ -325,7 +325,11 @@ spark-submit \
 ```
 
 Writes `ml/evaluation/results/comparison.{json,md}`, `ml/models/selected.json`,
-and a reproducible run record under `ml/experiments/`.
+and a reproducible run record under `ml/experiments/`. A robustness section
+restricts the selected model to symbols present on ≥90% of trading dates
+(`--coverage-threshold`). Point-in-time fundamentals
+(`ml/feature_engineering/asof.py`) are implemented but only wired into training
+once fundamentals history has accrued.
 
 ### Score the universe -> gold + Kafka
 

@@ -39,6 +39,7 @@ from indicators import compute_features  # noqa: E402
 from transform import MODEL_FEATURES, add_derived_features, apply_cross_sectional, transform_group  # noqa: E402
 from walk_forward import expanding_folds  # noqa: E402
 from backtest import backtest  # noqa: E402
+from asof import asof_join_fundamentals  # noqa: E402
 
 
 def _frame(closes, symbol="TEST.NS", start="2020-01-01"):
@@ -285,6 +286,35 @@ def test_deflated_sharpe_penalizes_trials():
     many = deflated_sharpe_ratio(returns, n_trials=100)
     assert 0.0 <= one["dsr"] <= 1.0
     assert one["dsr"] >= many["dsr"]
+
+
+def test_asof_join_picks_latest_known_snapshot():
+    panel = pd.DataFrame(
+        {"symbol": ["A", "A"], "trade_date": ["2020-01-05", "2020-01-15"]}
+    )
+    fundamentals = pd.DataFrame(
+        {
+            "symbol": ["A", "A"],
+            "timestamp": ["2020-01-03 09:00:00", "2020-01-10 09:00:00"],
+            "pe_ratio": [10.0, 20.0],
+        }
+    )
+    out = asof_join_fundamentals(panel, fundamentals).sort_values("trade_date")
+    assert list(out["pe_ratio"]) == [10.0, 20.0]
+
+
+def test_asof_join_no_lookahead():
+    panel = pd.DataFrame({"symbol": ["A"], "trade_date": ["2020-01-05"]})
+    # A snapshot published the day *after* the trade date must not be used.
+    fundamentals = pd.DataFrame(
+        {
+            "symbol": ["A"],
+            "timestamp": ["2020-01-06 09:00:00"],
+            "pe_ratio": [99.0],
+        }
+    )
+    out = asof_join_fundamentals(panel, fundamentals)
+    assert np.isnan(out["pe_ratio"].iloc[0])
 
 
 def _run_all():
