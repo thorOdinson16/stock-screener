@@ -18,7 +18,7 @@ index, top-K turnover, and a non-overlapping, cost-aware long/short backtest
 
 Run (from the repo root):
     spark-submit \
-      --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+      --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
       ml/evaluation/evaluate.py
 """
 
@@ -197,6 +197,7 @@ def selected_entry(best, models):
         "model_name": best,
         "path": models[best]["path"],
         "version": models[best]["version"],
+        "base_algo": models[best].get("base_algo", "gbt"),
     }
 
 

@@ -8,7 +8,7 @@ cover the tradable universe only. On-demand runs publish incrementally via
 
 Run (from the repo root):
     spark-submit \
-      --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0,org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.3 \
+      --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.4 \
       spark/jobs/publish_history.py
 """
 

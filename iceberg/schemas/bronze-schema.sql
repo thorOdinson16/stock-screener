@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS bronze.market_quotes (
   ingested_at TIMESTAMP NOT NULL
 )
 USING iceberg
-LOCATION '/warehouse/bronze/market_quotes'
 TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'
@@ -40,7 +39,6 @@ CREATE TABLE IF NOT EXISTS bronze.quotes_daily (
   ingested_at TIMESTAMP NOT NULL
 )
 USING iceberg
-LOCATION '/warehouse/bronze/quotes_daily'
 TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'
@@ -65,7 +63,6 @@ CREATE TABLE IF NOT EXISTS bronze.market_fundamentals (
   ingested_at TIMESTAMP NOT NULL
 )
 USING iceberg
-LOCATION '/warehouse/bronze/market_fundamentals'
 TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'

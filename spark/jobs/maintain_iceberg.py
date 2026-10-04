@@ -9,13 +9,13 @@ Per table:
 
 Snapshot expiry uses the base `Table.expireSnapshots()` API rather than the Spark
 procedure: the procedure distributes deletes through a Spark job that hangs in
-this Spark 4.1.3 + Iceberg 1.11 runtime. (Orphan-file cleanup is not available in
+this Spark 3.3.4 + Iceberg 1.8.1 runtime. (Orphan-file cleanup is not available in
 this bundled runtime — `org.apache.iceberg.actions.RemoveOrphanFiles` is not
 included — so it is intentionally omitted.)
 
 Run (from the repo root):
     spark-submit \
-      --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+      --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
       spark/jobs/maintain_iceberg.py --snapshot-retention-days 7
 """
 

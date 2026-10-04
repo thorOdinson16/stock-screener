@@ -3,7 +3,7 @@ Experiment 5 — Iceberg schema evolution, time travel, compaction, partition
 evolution (roadmap §4). Run with spark-submit:
 
     spark-submit \
-      --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+      --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
       benchmarks/iceberg.py
 
 Uses scratch tables under the `bench` namespace so production tables are never

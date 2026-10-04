@@ -19,7 +19,6 @@ CREATE TABLE IF NOT EXISTS gold.stock_scores (
   scored_at TIMESTAMP NOT NULL
 )
 USING iceberg
-LOCATION '/warehouse/gold/stock_scores'
 TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'
@@ -36,7 +35,6 @@ CREATE TABLE IF NOT EXISTS gold.top_picks (
   scored_at TIMESTAMP NOT NULL
 )
 USING iceberg
-LOCATION '/warehouse/gold/top_picks'
 TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'
@@ -90,7 +88,6 @@ CREATE TABLE IF NOT EXISTS ml.training_dataset (
   split STRING NOT NULL
 )
 USING iceberg
-LOCATION '/warehouse/ml/training_dataset'
 TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'

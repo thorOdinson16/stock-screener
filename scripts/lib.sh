@@ -28,6 +28,10 @@ spark_submit() {
   "$SPARK_HOME/bin/spark-submit" \
     --master "$SPARK_MASTER" \
     --driver-memory "$SPARK_DRIVER_MEMORY" \
+    --conf spark.sql.catalogImplementation=in-memory \
+    --conf spark.sql.iceberg.check-nullability=false \
+    --conf spark.pyspark.python="$PYSPARK_PYTHON" \
+    --conf spark.pyspark.driver.python="$PYSPARK_PYTHON" \
     --packages "$packages" \
     "$@"
 }

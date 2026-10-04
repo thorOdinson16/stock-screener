@@ -14,7 +14,7 @@ that the exact same code path runs at scoring time
 
 Run (from the repo root):
     spark-submit \
-      --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+      --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
       spark/jobs/build_training.py
 
 Prereq: the benchmark index has been backfilled
@@ -51,6 +51,8 @@ from features import (  # noqa: E402
     compute_split_dates,
 )
 from spark_schema import NORMALIZED_SCHEMA  # noqa: E402
+sys.path.insert(0, _HERE)
+from nullability import match_not_null  # noqa: E402
 from transform import MODEL_FEATURES, transform_group  # noqa: E402
 
 UNIVERSE_CACHE = os.path.join(_REPO_ROOT, "poller", "universe", "universe_cache.json")
@@ -91,7 +93,7 @@ _TRAINING_COLUMNS = (
 TRAINING_DDL = (
     "CREATE TABLE IF NOT EXISTS iceberg.ml.training_dataset (\n  "
     + ",\n  ".join(_TRAINING_COLUMNS)
-    + "\n)\nUSING iceberg\nLOCATION '/warehouse/ml/training_dataset'\n"
+    + "\n)\nUSING iceberg\n"
     "TBLPROPERTIES ('format-version'='2', 'write.parquet.compression-codec'='snappy')"
 )
 
@@ -215,6 +217,7 @@ def main():
 
     ensure_training_table(spark)
     dataset, test_start, embargo_start = build_dataset(spark)
+    dataset = match_not_null(dataset, spark, "iceberg.ml.training_dataset")
     dataset.createOrReplaceTempView("training_stage")
     spark.sql(
         "INSERT OVERWRITE iceberg.ml.training_dataset SELECT * FROM training_stage"

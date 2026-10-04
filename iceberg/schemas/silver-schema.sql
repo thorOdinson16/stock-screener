@@ -38,7 +38,6 @@ CREATE TABLE IF NOT EXISTS silver.quotes_enriched (
   computed_at TIMESTAMP NOT NULL
 )
 USING iceberg
-LOCATION '/warehouse/silver/quotes_enriched'
 TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'
@@ -63,7 +62,6 @@ CREATE TABLE IF NOT EXISTS silver.fundamentals_clean (
   earnings_growth DOUBLE
 )
 USING iceberg
-LOCATION '/warehouse/silver/fundamentals_clean'
 TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'

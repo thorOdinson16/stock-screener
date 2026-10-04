@@ -12,7 +12,7 @@ job can be re-run on the same day without duplicating.
 
 Run (from the repo root):
     spark-submit \
-      --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0,org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.3 \
+      --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.4 \
       spark/jobs/score_stocks.py
 """
 
@@ -36,6 +36,8 @@ _FEATURES_DIR = os.path.join(_REPO_ROOT, "ml", "feature_engineering")
 sys.path.insert(0, _FEATURES_DIR)
 from features import BENCHMARK_SYMBOLS  # noqa: E402
 from spark_schema import NORMALIZED_SCHEMA  # noqa: E402
+sys.path.insert(0, _HERE)
+from nullability import match_not_null  # noqa: E402
 from transform import MODEL_FEATURES, RAW_FEATURE_COLUMNS, transform_group  # noqa: E402
 
 DEFAULT_SELECTED = os.path.join(_REPO_ROOT, "ml", "models", "selected.json")
@@ -192,6 +194,7 @@ def main():
         .cache()
     )
 
+    scores = match_not_null(scores, spark, "iceberg.gold.stock_scores")
     scores.createOrReplaceTempView("scores_stage")
     spark.sql(
         f"DELETE FROM iceberg.gold.stock_scores WHERE trade_date = DATE '{score_date}'"
@@ -205,6 +208,7 @@ def main():
     top = scores.filter(F.col("rank") <= args.top_k).select(
         "trade_date", "label", "rank", "symbol", "score", "model_name", "scored_at"
     )
+    top = match_not_null(top, spark, "iceberg.gold.top_picks")
     top.createOrReplaceTempView("top_picks_stage")
     spark.sql(
         f"DELETE FROM iceberg.gold.top_picks WHERE trade_date = DATE '{score_date}'"

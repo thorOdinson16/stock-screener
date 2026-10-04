@@ -19,7 +19,7 @@ ml/models/registry.json.
 
 Run (from the repo root):
     spark-submit \
-      --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+      --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
       ml/training/train_model.py
 
 Writes: ml/models/<algo>_<label>_<timestamp>/ and ml/models/registry.json

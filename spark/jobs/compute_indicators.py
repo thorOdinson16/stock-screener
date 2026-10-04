@@ -7,7 +7,7 @@ silver.fundamentals_clean with the latest fundamentals snapshot per symbol.
 
 Run (from the repo root):
     spark-submit \
-      --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+      --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
       spark/jobs/compute_indicators.py
 
 Prereqs: `spark-sql ... -f iceberg/schemas/silver-schema.sql` has been run.
@@ -30,6 +30,7 @@ from pyspark.sql.types import (
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from indicators import compute_features  # noqa: E402
+from nullability import match_not_null  # noqa: E402
 
 FEATURE_SCHEMA = StructType(
     [
@@ -108,6 +109,7 @@ def compute_quotes_enriched(spark: SparkSession) -> int:
         .withColumn("computed_at", F.current_timestamp())
         .select(*ENRICHED_COLUMNS)
     )
+    features = match_not_null(features, spark, "iceberg.silver.quotes_enriched")
     features.createOrReplaceTempView("quotes_enriched_stage")
 
     spark.sql(
@@ -138,6 +140,7 @@ def refresh_fundamentals_clean(spark: SparkSession) -> int:
             "debt_to_equity", "revenue_growth", "earnings_growth",
         )
     )
+    latest = match_not_null(latest, spark, "iceberg.silver.fundamentals_clean")
     latest.createOrReplaceTempView("fundamentals_clean_stage")
     spark.sql(
         """
