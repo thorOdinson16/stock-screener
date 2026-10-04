@@ -10,6 +10,14 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Service homes (HADOOP_HOME, KAFKA_HOME, ...) come from the shared config.
+# shellcheck source=/dev/null
+source "$REPO_ROOT/config/pipeline.env"
+# Installed releases need different JVMs: Kafka runs on 17; SeaTunnel 2.3, Hive 3
+# and Druid 31 are not 17-ready and use Java 11.
+JAVA17="/usr/lib/jvm/java-17-openjdk-amd64"
+JAVA11="/usr/lib/jvm/java-11-openjdk-amd64"
+
 LOG_DIR="$HOME/stack-logs"
 PID_DIR="$LOG_DIR/pids"
 mkdir -p "$LOG_DIR" "$PID_DIR"
@@ -57,14 +65,14 @@ wait_for_port 9870 "HDFS NameNode WebUI" 60 || exit 1
 # ---- 2. Hive Metastore ---------------------------------------------------
 
 log "Starting Hive Metastore..."
-nohup "$HIVE_HOME/bin/hive" --service metastore >> "$LOG_DIR/hive-metastore.log" 2>&1 &
+JAVA_HOME="$JAVA11" nohup "$HIVE_HOME/bin/hive" --service metastore >> "$LOG_DIR/hive-metastore.log" 2>&1 &
 save_pid $! hive-metastore
 wait_for_port 9083 "Hive Metastore" 60 || exit 1
 
 # ---- 3. Kafka (KRaft, broker+controller combined) ------------------------
 
 log "Starting Kafka..."
-nohup "$KAFKA_HOME/bin/kafka-server-start.sh" "$KAFKA_HOME/config/server.properties" \
+JAVA_HOME="$JAVA17" nohup "$KAFKA_HOME/bin/kafka-server-start.sh" "$REPO_ROOT/kafka/configs/server.properties" \
   >> "$LOG_DIR/kafka.log" 2>&1 &
 save_pid $! kafka
 wait_for_port 9092 "Kafka broker" 60 || exit 1
@@ -72,14 +80,14 @@ wait_for_port 9092 "Kafka broker" 60 || exit 1
 # ---- 4. SeaTunnel (Zeta engine cluster) -----------------------------------
 
 log "Starting SeaTunnel Zeta cluster..."
-nohup "$SEATUNNEL_HOME/bin/seatunnel-cluster.sh" >> "$LOG_DIR/seatunnel.log" 2>&1 &
+JAVA_HOME="$JAVA11" nohup "$SEATUNNEL_HOME/bin/seatunnel-cluster.sh" >> "$LOG_DIR/seatunnel.log" 2>&1 &
 save_pid $! seatunnel
 wait_for_port 5801 "SeaTunnel Zeta" 60 || exit 1
 
 # ---- 5. Druid (single-server-small) ---------------------------------------
 
 log "Starting Druid (single-server-small)..."
-nohup "$DRUID_HOME/bin/start-single-server-small" >> "$LOG_DIR/druid.log" 2>&1 &
+JAVA_HOME="$JAVA11" DRUID_JAVA_HOME="$JAVA11" nohup "$DRUID_HOME/bin/start-single-server-small" >> "$LOG_DIR/druid.log" 2>&1 &
 save_pid $! druid
 wait_for_port 8888 "Druid Router" 90 || exit 1
 
@@ -94,6 +102,8 @@ fi
 
 log "Starting Airflow (standalone)..."
 export AIRFLOW__CORE__DAGS_FOLDER="$REPO_ROOT/airflow/dags"
+# A fresh Airflow DB creates DAGs paused; the dashboard button needs them live.
+export AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
 nohup airflow standalone >> "$LOG_DIR/airflow.log" 2>&1 &
 save_pid $! airflow
 wait_for_port 8080 "Airflow webserver" 90 || exit 1
