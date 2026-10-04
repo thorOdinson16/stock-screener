@@ -663,12 +663,9 @@ Hadoop, Hive Metastore, SeaTunnel, Druid, and Airflow all run as local processes
 ```text
 stock-screening-platform/
 │
-├── docker/                       (reserved — currently native install)
-│
 ├── poller/
 │   ├── poller.py
-│   ├── universe/                 (NIFTY 500 constituent list)
-│   └── config/
+│   └── universe/                 (NIFTY 500 constituent list)
 │
 ├── kafka/
 │   ├── topics/
@@ -678,27 +675,22 @@ stock-screening-platform/
 │   └── configs/
 │
 ├── spark/
-│   ├── streaming/
-│   ├── batch/
 │   └── jobs/
 │
 ├── iceberg/
 │   ├── schemas/
-│   ├── tables/
 │   └── maintenance/
 │
 ├── ml/
 │   ├── feature_engineering/
 │   ├── training/
-│   ├── evaluation/
-│   └── models/
+│   └── evaluation/        (trained models are written to ml/models/, gitignored)
 │
 ├── airflow/
 │   └── dags/
 │
 ├── druid/
-│   ├── ingestion/
-│   └── queries/
+│   └── ingestion/
 │
 ├── monitoring/
 │

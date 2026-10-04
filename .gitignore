@@ -30,8 +30,7 @@ airflow/*.pid
 *output.md
 
 # ML artifacts (models, registry, selection) and evaluation output
-ml/models/*
-!ml/models/.gitkeep
+ml/models/
 ml/evaluation/results/
 
 # Benchmark artifacts: scripts + curated final results are tracked; raw run
