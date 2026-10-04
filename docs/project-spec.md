@@ -153,15 +153,15 @@ The proposed system addresses this by building a distributed platform capable of
 | Layer                     | Technology                              |
 |----------------------------|------------------------------------------|
 | Data source                | `yfinance` (Yahoo Finance, unofficial)    |
-| Messaging / streaming       | Apache Kafka 4.3.1 (KRaft)                |
+| Messaging / streaming       | Apache Kafka 3.9.2 (KRaft)                |
 | Ingestion / transformation  | Apache SeaTunnel 2.3.13 (Zeta engine)      |
-| Distributed storage         | Apache Hadoop HDFS 3.4.1                   |
-| Lakehouse table format      | Apache Iceberg 1.11.0                      |
-| Metastore                  | Apache Hive Metastore 4.1.0                 |
-| Batch processing            | Apache Spark 4.1.3 (batch)                 |
+| Distributed storage         | Apache Hadoop HDFS 3.3.6                   |
+| Lakehouse table format      | Apache Iceberg 1.8.1                      |
+| Metastore                  | Apache Hive Metastore 3.1.3                 |
+| Batch processing            | Apache Spark 3.3.4 (batch)                 |
 | Machine learning            | Spark MLlib                                |
-| Low-latency analytics        | Apache Druid 37.0.0                        |
-| Orchestration               | Apache Airflow 3.3.1                        |
+| Low-latency analytics        | Apache Druid 31.0.1                        |
+| Orchestration               | Apache Airflow 3.3.0                        |
 | Build tooling                | Maven 3.8.7                                 |
 
 > **Note on data source**: `yfinance` wraps Yahoo Finance's unofficial, publicly-accessible

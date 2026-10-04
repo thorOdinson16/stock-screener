@@ -1,5 +1,5 @@
 {
-  "fetched_at": 1789066317.6654458,
+  "fetched_at": 1791096757.3577132,
   "stocks": [
     {
       "company_name": "360 ONE WAM Ltd.",
@@ -7,13 +7,6 @@
       "symbol": "360ONE",
       "yf_symbol": "360ONE.NS",
       "isin": "INE466L01038"
-    },
-    {
-      "company_name": "3M India Ltd.",
-      "industry": "Diversified",
-      "symbol": "3MINDIA",
-      "yf_symbol": "3MINDIA.NS",
-      "isin": "INE470A01017"
     },
     {
       "company_name": "ABB India Ltd.",
@@ -156,20 +149,6 @@
       "isin": "INE674K01013"
     },
     {
-      "company_name": "Aditya Birla Fashion and Retail Ltd.",
-      "industry": "Consumer Services",
-      "symbol": "ABFRL",
-      "yf_symbol": "ABFRL.NS",
-      "isin": "INE647O01011"
-    },
-    {
-      "company_name": "Aditya Birla Lifestyle Brands Ltd.",
-      "industry": "Consumer Services",
-      "symbol": "ABLBL",
-      "yf_symbol": "ABLBL.NS",
-      "isin": "INE14LE01019"
-    },
-    {
       "company_name": "Aditya Birla Real Estate Ltd.",
       "industry": "Realty",
       "symbol": "ABREL",
@@ -203,6 +182,13 @@
       "symbol": "AEGISVOPAK",
       "yf_symbol": "AEGISVOPAK.NS",
       "isin": "INE0INX01018"
+    },
+    {
+      "company_name": "Aether Industries Ltd.",
+      "industry": "Chemicals",
+      "symbol": "AETHER",
+      "yf_symbol": "AETHER.NS",
+      "isin": "INE0BWX01014"
     },
     {
       "company_name": "Afcons Infrastructure Ltd.",
@@ -387,6 +373,13 @@
       "isin": "INE206F01022"
     },
     {
+      "company_name": "Avanti Feeds Ltd.",
+      "industry": "Fast Moving Consumer Goods",
+      "symbol": "AVANTIFEED",
+      "yf_symbol": "AVANTIFEED.NS",
+      "isin": "INE871C01038"
+    },
+    {
       "company_name": "Avenue Supermarts Ltd.",
       "industry": "Consumer Services",
       "symbol": "DMART",
@@ -399,6 +392,13 @@
       "symbol": "AXISBANK",
       "yf_symbol": "AXISBANK.NS",
       "isin": "INE238A01034"
+    },
+    {
+      "company_name": "Azad Engineering Ltd.",
+      "industry": "Capital Goods",
+      "symbol": "AZAD",
+      "yf_symbol": "AZAD.NS",
+      "isin": "INE02IJ01035"
     },
     {
       "company_name": "BEML Ltd.",
@@ -420,6 +420,13 @@
       "symbol": "BSE",
       "yf_symbol": "BSE.NS",
       "isin": "INE118H01025"
+    },
+    {
+      "company_name": "Bagmane Prime Office REIT",
+      "industry": "Realty",
+      "symbol": "BAGMANE",
+      "yf_symbol": "BAGMANE.NS",
+      "isin": "INE2OVN25015"
     },
     {
       "company_name": "Bajaj Auto Ltd.",
@@ -506,13 +513,6 @@
       "isin": "INE176A01028"
     },
     {
-      "company_name": "Bayer Cropscience Ltd.",
-      "industry": "Chemicals",
-      "symbol": "BAYERCROP",
-      "yf_symbol": "BAYERCROP.NS",
-      "isin": "INE462A01022"
-    },
-    {
       "company_name": "Belrise Industries Ltd.",
       "industry": "Automobile and Auto Components",
       "symbol": "BELRISE",
@@ -525,6 +525,13 @@
       "symbol": "BERGEPAINT",
       "yf_symbol": "BERGEPAINT.NS",
       "isin": "INE463A01038"
+    },
+    {
+      "company_name": "Bharat Coking Coal Ltd.",
+      "industry": "Oil Gas & Consumable Fuels",
+      "symbol": "BHARATCOAL",
+      "yf_symbol": "BHARATCOAL.NS",
+      "isin": "INE05XR01022"
     },
     {
       "company_name": "Bharat Dynamics Ltd.",
@@ -576,13 +583,6 @@
       "isin": "INE343G01021"
     },
     {
-      "company_name": "Bikaji Foods International Ltd.",
-      "industry": "Fast Moving Consumer Goods",
-      "symbol": "BIKAJI",
-      "yf_symbol": "BIKAJI.NS",
-      "isin": "INE00E101023"
-    },
-    {
       "company_name": "Billionbrains Garage Ventures Ltd.",
       "industry": "Financial Services",
       "symbol": "GROWW",
@@ -604,18 +604,11 @@
       "isin": "INE836A01035"
     },
     {
-      "company_name": "Blue Dart Express Ltd.",
-      "industry": "Services",
-      "symbol": "BLUEDART",
-      "yf_symbol": "BLUEDART.NS",
-      "isin": "INE233B01017"
-    },
-    {
-      "company_name": "Blue Jet Healthcare Ltd.",
-      "industry": "Healthcare",
-      "symbol": "BLUEJET",
-      "yf_symbol": "BLUEJET.NS",
-      "isin": "INE0KBH01020"
+      "company_name": "Black Box Ltd.",
+      "industry": "Information Technology",
+      "symbol": "BBOX",
+      "yf_symbol": "BBOX.NS",
+      "isin": "INE676A01027"
     },
     {
       "company_name": "Blue Star Ltd.",
@@ -623,13 +616,6 @@
       "symbol": "BLUESTARCO",
       "yf_symbol": "BLUESTARCO.NS",
       "isin": "INE472A01039"
-    },
-    {
-      "company_name": "Bombay Burmah Trading Corporation Ltd.",
-      "industry": "Fast Moving Consumer Goods",
-      "symbol": "BBTC",
-      "yf_symbol": "BBTC.NS",
-      "isin": "INE050A01025"
     },
     {
       "company_name": "Bosch Ltd.",
@@ -660,11 +646,11 @@
       "isin": "INE216A01030"
     },
     {
-      "company_name": "C.E. Info Systems Ltd.",
-      "industry": "Information Technology",
-      "symbol": "MAPMYINDIA",
-      "yf_symbol": "MAPMYINDIA.NS",
-      "isin": "INE0BV301023"
+      "company_name": "Brookfield India Real Estate Trust",
+      "industry": "Realty",
+      "symbol": "BIRET",
+      "yf_symbol": "BIRET.NS",
+      "isin": "INE0FDU25010"
     },
     {
       "company_name": "CCL Products (I) Ltd.",
@@ -786,11 +772,11 @@
       "isin": "INE736A01011"
     },
     {
-      "company_name": "Chalet Hotels Ltd.",
-      "industry": "Consumer Services",
-      "symbol": "CHALET",
-      "yf_symbol": "CHALET.NS",
-      "isin": "INE427F01016"
+      "company_name": "Central Mine Planning & Design Institute Ltd.",
+      "industry": "Services",
+      "symbol": "CMPDI",
+      "yf_symbol": "CMPDI.NS",
+      "isin": "INE05HV01027"
     },
     {
       "company_name": "Chambal Fertilizers & Chemicals Ltd.",
@@ -840,6 +826,13 @@
       "symbol": "CUB",
       "yf_symbol": "CUB.NS",
       "isin": "INE491A01021"
+    },
+    {
+      "company_name": "Clean Max Enviro Energy Solutions Ltd.",
+      "industry": "Power",
+      "symbol": "CLEANMAX",
+      "yf_symbol": "CLEANMAX.NS",
+      "isin": "INE647U01026"
     },
     {
       "company_name": "Clean Science and Technology Ltd.",
@@ -940,18 +933,18 @@
       "isin": "INE298A01020"
     },
     {
+      "company_name": "Cupid Ltd.",
+      "industry": "Fast Moving Consumer Goods",
+      "symbol": "CUPID",
+      "yf_symbol": "CUPID.NS",
+      "isin": "INE509F01029"
+    },
+    {
       "company_name": "Cyient Ltd.",
       "industry": "Information Technology",
       "symbol": "CYIENT",
       "yf_symbol": "CYIENT.NS",
       "isin": "INE136B01020"
-    },
-    {
-      "company_name": "DCM Shriram Ltd.",
-      "industry": "Diversified",
-      "symbol": "DCMSHRIRAM",
-      "yf_symbol": "DCMSHRIRAM.NS",
-      "isin": "INE499A01024"
     },
     {
       "company_name": "DLF Ltd.",
@@ -1045,6 +1038,13 @@
       "isin": "INE089A01031"
     },
     {
+      "company_name": "Dummy HEG Ltd.",
+      "industry": "Capital Goods",
+      "symbol": "DUMMYHEG",
+      "yf_symbol": "DUMMYHEG.NS",
+      "isin": "DUM545A01024"
+    },
+    {
       "company_name": "E.I.D. Parry (India) Ltd.",
       "industry": "Fast Moving Consumer Goods",
       "symbol": "EIDPARRY",
@@ -1057,6 +1057,13 @@
       "symbol": "EIHOTEL",
       "yf_symbol": "EIHOTEL.NS",
       "isin": "INE230A01023"
+    },
+    {
+      "company_name": "EMBASSY OFFICE PARKS REIT",
+      "industry": "Realty",
+      "symbol": "EMBASSY",
+      "yf_symbol": "EMBASSY.NS",
+      "isin": "INE041025011"
     },
     {
       "company_name": "Eicher Motors Ltd.",
@@ -1113,13 +1120,6 @@
       "symbol": "ENGINERSIN",
       "yf_symbol": "ENGINERSIN.NS",
       "isin": "INE510A01028"
-    },
-    {
-      "company_name": "Eris Lifesciences Ltd.",
-      "industry": "Healthcare",
-      "symbol": "ERIS",
-      "yf_symbol": "ERIS.NS",
-      "isin": "INE406M01024"
     },
     {
       "company_name": "Escorts Kubota Ltd.",
@@ -1197,6 +1197,13 @@
       "symbol": "FORTIS",
       "yf_symbol": "FORTIS.NS",
       "isin": "INE061F01013"
+    },
+    {
+      "company_name": "Fractal Analytics Ltd.",
+      "industry": "Information Technology",
+      "symbol": "FRACTAL",
+      "yf_symbol": "FRACTAL.NS",
+      "isin": "INE212S01015"
     },
     {
       "company_name": "GAIL (India) Ltd.",
@@ -1281,13 +1288,6 @@
       "symbol": "MEDANTA",
       "yf_symbol": "MEDANTA.NS",
       "isin": "INE474Q01031"
-    },
-    {
-      "company_name": "Go Digit General Insurance Ltd.",
-      "industry": "Financial Services",
-      "symbol": "GODIGIT",
-      "yf_symbol": "GODIGIT.NS",
-      "isin": "INE03JT01014"
     },
     {
       "company_name": "Godawari Power & Ispat Ltd.",
@@ -1416,10 +1416,10 @@
       "isin": "INE795G01014"
     },
     {
-      "company_name": "HEG Ltd.",
+      "company_name": "HEG Advanced Materials Ltd.",
       "industry": "Capital Goods",
-      "symbol": "HEG",
-      "yf_symbol": "HEG.NS",
+      "symbol": "HEGAM",
+      "yf_symbol": "HEGAM.NS",
       "isin": "INE545A01024"
     },
     {
@@ -1598,6 +1598,13 @@
       "isin": "INE530B01024"
     },
     {
+      "company_name": "INOX India Ltd.",
+      "industry": "Capital Goods",
+      "symbol": "INOXINDIA",
+      "yf_symbol": "INOXINDIA.NS",
+      "isin": "INE616N01034"
+    },
+    {
       "company_name": "IRB Infrastructure Developers Ltd.",
       "industry": "Construction",
       "symbol": "IRB",
@@ -1631,13 +1638,6 @@
       "symbol": "ITI",
       "yf_symbol": "ITI.NS",
       "isin": "INE248A01017"
-    },
-    {
-      "company_name": "Indegene Ltd.",
-      "industry": "Healthcare",
-      "symbol": "INDGN",
-      "yf_symbol": "INDGN.NS",
-      "isin": "INE065X01017"
     },
     {
       "company_name": "India Cements Ltd.",
@@ -1822,13 +1822,6 @@
       "isin": "INE718I01012"
     },
     {
-      "company_name": "JSW Dulux Ltd.",
-      "industry": "Consumer Durables",
-      "symbol": "JSWDULUX",
-      "yf_symbol": "JSWDULUX.NS",
-      "isin": "INE133A01011"
-    },
-    {
       "company_name": "JSW Energy Ltd.",
       "industry": "Power",
       "symbol": "JSWENERGY",
@@ -1913,13 +1906,6 @@
       "isin": "INE0BY001018"
     },
     {
-      "company_name": "Jubilant Pharmova Ltd.",
-      "industry": "Healthcare",
-      "symbol": "JUBLPHARMA",
-      "yf_symbol": "JUBLPHARMA.NS",
-      "isin": "INE700A01033"
-    },
-    {
       "company_name": "Jupiter Wagons Ltd.",
       "industry": "Capital Goods",
       "symbol": "JWL",
@@ -1953,6 +1939,13 @@
       "symbol": "KPITTECH",
       "yf_symbol": "KPITTECH.NS",
       "isin": "INE04I401011"
+    },
+    {
+      "company_name": "KSB Ltd.",
+      "industry": "Capital Goods",
+      "symbol": "KSB",
+      "yf_symbol": "KSB.NS",
+      "isin": "INE999A01023"
     },
     {
       "company_name": "Kajaria Ceramics Ltd.",
@@ -2002,6 +1995,13 @@
       "symbol": "KFINTECH",
       "yf_symbol": "KFINTECH.NS",
       "isin": "INE138Y01010"
+    },
+    {
+      "company_name": "Kirloskar Brothers Ltd.",
+      "industry": "Capital Goods",
+      "symbol": "KIRLOSBROS",
+      "yf_symbol": "KIRLOSBROS.NS",
+      "isin": "INE732A01036"
     },
     {
       "company_name": "Kirloskar Oil Eng Ltd.",
@@ -2074,25 +2074,11 @@
       "isin": "INE018A01030"
     },
     {
-      "company_name": "Latent View Analytics Ltd.",
-      "industry": "Information Technology",
-      "symbol": "LATENTVIEW",
-      "yf_symbol": "LATENTVIEW.NS",
-      "isin": "INE0I7C01011"
-    },
-    {
       "company_name": "Laurus Labs Ltd.",
       "industry": "Healthcare",
       "symbol": "LAURUSLABS",
       "yf_symbol": "LAURUSLABS.NS",
       "isin": "INE947Q01028"
-    },
-    {
-      "company_name": "Leela Palaces Hotels & Resorts Ltd.",
-      "industry": "Consumer Services",
-      "symbol": "THELEELA",
-      "yf_symbol": "THELEELA.NS",
-      "isin": "INE0AQ201015"
     },
     {
       "company_name": "Lemon Tree Hotels Ltd.",
@@ -2156,6 +2142,13 @@
       "symbol": "MRF",
       "yf_symbol": "MRF.NS",
       "isin": "INE883A01011"
+    },
+    {
+      "company_name": "MTAR Technologies Ltd.",
+      "industry": "Capital Goods",
+      "symbol": "MTARTECH",
+      "yf_symbol": "MTARTECH.NS",
+      "isin": "INE864I01014"
     },
     {
       "company_name": "Mahanagar Gas Ltd.",
@@ -2396,25 +2389,11 @@
       "isin": "INE794A01010"
     },
     {
-      "company_name": "Newgen Software Technologies Ltd.",
-      "industry": "Information Technology",
-      "symbol": "NEWGEN",
-      "yf_symbol": "NEWGEN.NS",
-      "isin": "INE619B01017"
-    },
-    {
       "company_name": "Nippon Life India Asset Management Ltd.",
       "industry": "Financial Services",
       "symbol": "NAM-INDIA",
       "yf_symbol": "NAM-INDIA.NS",
       "isin": "INE298J01013"
-    },
-    {
-      "company_name": "Niva Bupa Health Insurance Company Ltd.",
-      "industry": "Financial Services",
-      "symbol": "NIVABUPA",
-      "yf_symbol": "NIVABUPA.NS",
-      "isin": "INE995S01015"
     },
     {
       "company_name": "Nuvama Wealth Management Ltd.",
@@ -2571,13 +2550,6 @@
       "isin": "INE347G01014"
     },
     {
-      "company_name": "Pfizer Ltd.",
-      "industry": "Healthcare",
-      "symbol": "PFIZER",
-      "yf_symbol": "PFIZER.NS",
-      "isin": "INE182A01018"
-    },
-    {
       "company_name": "Phoenix Mills Ltd.",
       "industry": "Realty",
       "symbol": "PHOENIXLTD",
@@ -2674,6 +2646,13 @@
       "symbol": "PFOCUS",
       "yf_symbol": "PFOCUS.NS",
       "isin": "INE367G01038"
+    },
+    {
+      "company_name": "Privi Speciality Chemicals Ltd.",
+      "industry": "Chemicals",
+      "symbol": "PRIVISCL",
+      "yf_symbol": "PRIVISCL.NS",
+      "isin": "INE959A01019"
     },
     {
       "company_name": "Punjab National Bank",
@@ -2774,11 +2753,11 @@
       "isin": "INE614G01033"
     },
     {
-      "company_name": "SBFC Finance Ltd.",
-      "industry": "Financial Services",
-      "symbol": "SBFC",
-      "yf_symbol": "SBFC.NS",
-      "isin": "INE423Y01016"
+      "company_name": "Rubicon Research Ltd.",
+      "industry": "Healthcare",
+      "symbol": "RUBICON",
+      "yf_symbol": "RUBICON.NS",
+      "isin": "INE506V01022"
     },
     {
       "company_name": "SBI Cards and Payment Services Ltd.",
@@ -2800,6 +2779,13 @@
       "symbol": "SJVN",
       "yf_symbol": "SJVN.NS",
       "isin": "INE002L01015"
+    },
+    {
+      "company_name": "SPR Auto Technologies Ltd.",
+      "industry": "Automobile and Auto Components",
+      "symbol": "SHRIPISTON",
+      "yf_symbol": "SHRIPISTON.NS",
+      "isin": "INE526E01018"
     },
     {
       "company_name": "SRF Ltd.",
@@ -2837,11 +2823,11 @@
       "isin": "INE775A01035"
     },
     {
-      "company_name": "Sapphire Foods India Ltd.",
-      "industry": "Consumer Services",
-      "symbol": "SAPPHIRE",
-      "yf_symbol": "SAPPHIRE.NS",
-      "isin": "INE806T01020"
+      "company_name": "Sansera Engineering Ltd.",
+      "industry": "Automobile and Auto Components",
+      "symbol": "SANSERA",
+      "yf_symbol": "SANSERA.NS",
+      "isin": "INE953O01021"
     },
     {
       "company_name": "Sarda Energy and Minerals Ltd.",
@@ -2849,13 +2835,6 @@
       "symbol": "SARDAEN",
       "yf_symbol": "SARDAEN.NS",
       "isin": "INE385C01021"
-    },
-    {
-      "company_name": "Saregama India Ltd",
-      "industry": "Media Entertainment & Publication",
-      "symbol": "SAREGAMA",
-      "yf_symbol": "SAREGAMA.NS",
-      "isin": "INE979A01025"
     },
     {
       "company_name": "Schaeffler India Ltd.",
@@ -2942,13 +2921,6 @@
       "isin": "INE073K01018"
     },
     {
-      "company_name": "Sonata Software Ltd.",
-      "industry": "Information Technology",
-      "symbol": "SONATSOFTW",
-      "yf_symbol": "SONATSOFTW.NS",
-      "isin": "INE269A01021"
-    },
-    {
       "company_name": "Star Health and Allied Insurance Company Ltd.",
       "industry": "Financial Services",
       "symbol": "STARHEALTH",
@@ -2968,6 +2940,13 @@
       "symbol": "SAIL",
       "yf_symbol": "SAIL.NS",
       "isin": "INE114A01011"
+    },
+    {
+      "company_name": "Sterlite Technologies Ltd.",
+      "industry": "Telecommunication",
+      "symbol": "STLTECH",
+      "yf_symbol": "STLTECH.NS",
+      "isin": "INE089C01029"
     },
     {
       "company_name": "Sumitomo Chemical India Ltd.",
@@ -3003,13 +2982,6 @@
       "symbol": "SUPREMEIND",
       "yf_symbol": "SUPREMEIND.NS",
       "isin": "INE195A01028"
-    },
-    {
-      "company_name": "Supreme Petrochem Ltd.",
-      "industry": "Chemicals",
-      "symbol": "SPLPETRO",
-      "yf_symbol": "SPLPETRO.NS",
-      "isin": "INE663A01033"
     },
     {
       "company_name": "Suzlon Energy Ltd.",
@@ -3052,6 +3024,13 @@
       "symbol": "TBOTEK",
       "yf_symbol": "TBOTEK.NS",
       "isin": "INE673O01025"
+    },
+    {
+      "company_name": "TD Power Systems Ltd.",
+      "industry": "Capital Goods",
+      "symbol": "TDPOWERSYS",
+      "yf_symbol": "TDPOWERSYS.NS",
+      "isin": "INE419M01035"
     },
     {
       "company_name": "TVS Motor Company Ltd.",
@@ -3187,6 +3166,13 @@
       "isin": "INE19RI01016"
     },
     {
+      "company_name": "Thangamayil Jewellery Ltd.",
+      "industry": "Consumer Durables",
+      "symbol": "THANGAMAYL",
+      "yf_symbol": "THANGAMAYL.NS",
+      "isin": "INE085J01014"
+    },
+    {
       "company_name": "The New India Assurance Company Ltd.",
       "industry": "Financial Services",
       "symbol": "NIACL",
@@ -3248,13 +3234,6 @@
       "symbol": "TARIL",
       "yf_symbol": "TARIL.NS",
       "isin": "INE763I01026"
-    },
-    {
-      "company_name": "Travel Food Services Ltd.",
-      "industry": "Consumer Services",
-      "symbol": "TRAVELFOOD",
-      "yf_symbol": "TRAVELFOOD.NS",
-      "isin": "INE103V01028"
     },
     {
       "company_name": "Trent Ltd.",
@@ -3369,11 +3348,39 @@
       "isin": "INE200M01039"
     },
     {
+      "company_name": "Vedanta Aluminium Metal Ltd.",
+      "industry": "Metals & Mining",
+      "symbol": "VAML",
+      "yf_symbol": "VAML.NS",
+      "isin": "INE1CDF01017"
+    },
+    {
+      "company_name": "Vedanta Iron and Steel Ltd.",
+      "industry": "Metals & Mining",
+      "symbol": "VISL",
+      "yf_symbol": "VISL.NS",
+      "isin": "INE1CLE01013"
+    },
+    {
       "company_name": "Vedanta Ltd.",
       "industry": "Metals & Mining",
       "symbol": "VEDL",
       "yf_symbol": "VEDL.NS",
       "isin": "INE205A01025"
+    },
+    {
+      "company_name": "Vedanta Oil and Gas Ltd.",
+      "industry": "Oil Gas & Consumable Fuels",
+      "symbol": "VOGL",
+      "yf_symbol": "VOGL.NS",
+      "isin": "INE704J01044"
+    },
+    {
+      "company_name": "Vedanta Power Ltd.",
+      "industry": "Power",
+      "symbol": "VEDPOWER",
+      "yf_symbol": "VEDPOWER.NS",
+      "isin": "INE694L01019"
     },
     {
       "company_name": "Vijaya Diagnostic Centre Ltd.",

@@ -42,15 +42,15 @@ Stages (each is a `scripts/` wrapper run as an Airflow task):
 
 | Component  | Version                              |
 |------------|---------------------------------------|
-| Java       | 21 (PATH) / 17 (`JAVA_HOME`)          |
-| Kafka      | 4.3.1 (KRaft, no ZooKeeper)           |
-| Spark      | 4.1.3 (Scala 2.13.17)                 |
-| Hadoop     | 3.4.1                                  |
-| Hive       | 4.1.0 (Metastore only)                 |
+| Java       | 17 (`JAVA_HOME`, Kafka) / 11 (Spark, Hadoop, Hive, SeaTunnel, Druid) |
+| Kafka      | 3.9.2 (KRaft, no ZooKeeper; Scala 2.12 build) |
+| Spark      | 3.3.4 (Scala 2.12.15), PySpark on Python 3.10 |
+| Hadoop     | 3.3.6                                  |
+| Hive       | 3.1.3 (Metastore only)                 |
 | SeaTunnel  | 2.3.13 (Zeta engine)                   |
-| Iceberg    | 1.11.0 (`iceberg-spark-runtime-4.1_2.13`) |
-| Druid      | 37.0.0 (single-server-small, native)   |
-| Airflow    | 3.3.1                                  |
+| Iceberg    | 1.8.1 (`iceberg-spark-runtime-3.3_2.12`) |
+| Druid      | 31.0.1 (single-server-small, native)   |
+| Airflow    | 3.3.0                                  |
 | Maven      | 3.8.7                                  |
 | Data source | `yfinance` (Yahoo Finance, unofficial, delayed) |
 

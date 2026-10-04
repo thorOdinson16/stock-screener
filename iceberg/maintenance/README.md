@@ -14,8 +14,8 @@ Tables: `bronze.{market_quotes,quotes_daily,market_fundamentals}`,
 
 **Orphan-file cleanup is intentionally not included** — the bundled
 `iceberg-spark-runtime` does not ship `org.apache.iceberg.actions.RemoveOrphanFiles`,
-and the Spark `remove_orphan_files` procedure hangs in this Spark 4.1.3 + Iceberg
-1.11 runtime.
+and the Spark `remove_orphan_files` procedure hangs in this Spark 3.3.4 + Iceberg
+1.8.1 runtime.
 
 ## Run
 
@@ -25,7 +25,7 @@ SNAPSHOT_RETENTION_DAYS=30 scripts/maintenance.sh
 DRY_RUN=1 scripts/maintenance.sh       # stats only, no changes
 
 # single table
-spark-submit --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+spark-submit --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
   spark/jobs/maintain_iceberg.py --tables iceberg.gold.stock_scores
 ```
 

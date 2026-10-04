@@ -43,7 +43,9 @@ avoids repeating the four Iceberg `--conf` lines.
 
 ```bash
 SPARK_ICEBERG=(
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1
+  --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+  --conf spark.hadoop.hive.metastore.uris=thrift://localhost:9083   # the CLI always opens a Hive client; use the running metastore, not embedded Derby
   --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog
   --conf spark.sql.catalog.iceberg.type=hadoop
   --conf spark.sql.catalog.iceberg.warehouse=hdfs://localhost:9000/warehouse
@@ -129,6 +131,25 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Spark 3.3.4 cannot run on Python 3.12, so the Spark jobs use a separate Python 3.10
+virtualenv (`config/pipeline.env` and `scripts/lib.sh` point `spark.pyspark.python` at it):
+
+```bash
+/usr/local/bin/python3.10 -m venv spark/.venv
+spark/.venv/bin/pip install "numpy<2" "pandas<2.2" "pyarrow<15"
+```
+
+One-time machine settings for the installed (older) releases:
+
+- Kafka 3.9.2 runs in KRaft mode from `kafka/configs/server.properties`. Format its
+  log dir once: `kafka-storage.sh format -t $(kafka-storage.sh random-uuid) -c kafka/configs/server.properties`.
+- Druid 31 bundles a ZooKeeper whose admin server grabs port 8080 (Airflow's port).
+  Add `admin.enableServer=false` to `$DRUID_HOME/conf/zk/zoo.cfg`.
+- Spark jobs run with an in-memory Spark catalog (`spark.sql.catalogImplementation=in-memory`,
+  set in `scripts/lib.sh`); the Iceberg catalog is a Hadoop catalog on HDFS, so Hive is
+  not needed by Spark. The interactive `spark-sql` CLI always opens a Hive client, so
+  `SPARK_ICEBERG` points it at the running metastore.
+
 (The API venv and dashboard `node_modules` are created automatically by
 `start-ui.sh` in step 1.10.)
 
@@ -190,7 +211,7 @@ Reads `bronze.quotes_daily`, computes the technical indicators
 
 ```bash
 spark-submit \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
   spark/jobs/compute_indicators.py
 ```
 
@@ -203,17 +224,17 @@ Rebuilds the training dataset, trains all models, evaluates them, and writes
 ```bash
 # Build the training dataset (features, excess-return labels, benchmarks, split).
 spark-submit --driver-memory 4g --master "local[8]" \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
   spark/jobs/build_training.py
 
 # Train all candidate models.
 spark-submit --driver-memory 6g --master "local[8]" \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
   ml/training/train_model.py
 
 # Evaluate, select, and record the run (walk-forward + cost-aware backtest).
 spark-submit --driver-memory 4g --master "local[8]" \
-  --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
   ml/evaluation/evaluate.py
 ```
 
@@ -426,7 +447,7 @@ python benchmarks/latency.py --repeat 3                   # exp 2
 python benchmarks/model.py --run                          # exp 3
 python benchmarks/recovery.py --component kafka \
     --kill-cmd "..." --start-cmd "..."                    # exp 4
-spark-submit --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 \
+spark-submit --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 \
     benchmarks/iceberg.py                                 # exp 5
 python benchmarks/scalability.py --masters "local[4]" "local[8]" --limit 100   # exp 6
 ```

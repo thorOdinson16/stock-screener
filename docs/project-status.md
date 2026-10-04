@@ -157,3 +157,22 @@ Key locations:
 - Frontend `npm run typecheck` clean; Airflow DAGs parse without import errors.
 - A full on-demand Airflow run completes, including resume → drain → suspend of
   the Druid supervisors.
+
+---
+
+## 6. Re-pin to the installed stack (2026-10-04)
+
+The machine's service installs were replaced by older releases and could not be
+changed, so the project was ported down to them (the README version table is the
+source of truth): Spark 3.3.4 / Scala 2.12, Iceberg 1.8.1, Hadoop 3.3.6, Hive 3.1.3,
+Kafka 3.9.2, Druid 31.0.1, Airflow 3.3.0. Changes: Spark/Kafka package coordinates;
+a Python 3.10 venv for Spark (`spark/.venv`); in-memory Spark catalog and Iceberg
+`check-nullability` off in `scripts/lib.sh`; `spark/jobs/nullability.py` (Spark 3.3
+rejects nullable data into NOT NULL columns); `LOCATION` clauses removed from the
+Iceberg DDL (Hadoop catalog); a KRaft config for Kafka (`kafka/configs/`); per-service
+JVMs and unpaused DAGs in `start-stack.sh`; and `evaluate.py` now records `base_algo`
+for non-ensemble selections (a latent bug that broke scoring whenever a non-GBT
+single model was selected). Data was rebuilt from scratch (HDFS was empty) and the
+model retrained; verified with the unit tests, `scripts/run_once.sh --history` and an
+Airflow-triggered `screening_on_demand` run via the API. Model metrics in section 3
+predate the retrain.
