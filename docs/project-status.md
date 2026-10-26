@@ -120,6 +120,12 @@ research screen (linear IC 0.045), but it needs serving and dashboard changes.
 
 ## 4. Deferred / out of scope
 
+- **Known issue — runs don't add new daily bars.** Indicators and scoring read
+  `bronze.quotes_daily`, which only the historical backfill (`poller/backfill.py`)
+  fills. A pipeline run's live quotes go to `bronze.market_quotes` and Druid, not
+  into the daily bars, so scores stay at the date of the last backfill (currently
+  2026-10-01) until the backfill is re-run. Proposed fix: an incremental
+  daily-bar fetch + `quotes-daily-job` in each run.
 - **Scheduled/timetable Airflow DAGs** — removed: the platform is fully on-demand.
 - **Spark Structured Streaming** — removed; there is no always-on stream processor.
 - **Iceberg orphan-file cleanup** — omitted (bundled runtime lacks
@@ -225,7 +231,9 @@ Also fixed: `asof.py` failed on multi-symbol panels (merge_asof needs a globally
 sorted key).
 
 **Docker.** The platform runs under Docker Compose with prebuilt GHCR images; see
-`docker/README.md`. `docker/init.sh` re-applies topic/table definitions whenever
+`docker/README.md`. The images were rebuilt with this round's changes and verified
+(upgrade of an existing install, 20-symbol data load, Full run via the dashboard
+API) before being pushed. `docker/init.sh` re-applies topic/table definitions whenever
 they change, so an upgraded image adds the new financial-statement tables and
 topic to an existing install.
 
