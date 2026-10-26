@@ -64,27 +64,31 @@ stock over the next 5 and 21 trading days. Inputs are 14 scale-free technical
 features, cross-sectionally normalized per day; targets are cross-sectional
 excess returns.
 
-**Selected models:** `gbt_rank` (5d), `rank_ensemble` (21d).
+**Selected models (2026-10-04 retrain):** `rank_ensemble` (5d: `gbt_rank` + `rf_rank`),
+`linear` (21d). Selection is noisy: for 21d, `rank_ensemble` had a marginally higher IC
+(0.061 vs 0.057) but `linear` was picked.
 
 **Results (5y data, K=20, 10 bps/side):**
 
-| metric | 5d (gbt_rank) | 21d (rank_ensemble) |
+| metric | 5d (rank_ensemble) | 21d (linear) |
 |---|---|---|
-| Fixed-test IC (t) | 0.023 (2.49) | 0.056 (3.96) |
-| Fixed-test net Sharpe | 1.19 | 3.57 |
-| Walk-forward IC (t) | 0.011 (1.57) | 0.007 (0.41) |
-| Purged K-fold IC (t) | 0.010 (1.95) | 0.010 (0.86) |
-| Full-history robustness IC (t) | 0.022 (2.37) | 0.058 (3.94) |
-| Rule baseline net Sharpe | −0.71 | −0.54 |
+| Fixed-test IC (t) | 0.027 (3.16) | 0.057 (2.63) |
+| Fixed-test net Sharpe | 1.93 | 3.19 |
+| Walk-forward IC (t) | 0.012 (1.68) | −0.001 (−0.08) |
+| Walk-forward net Sharpe | −0.10 | 0.74 |
+| Full-history (414 symbols) IC (t) | 0.027 (3.06) | 0.054 (2.38) |
+| Rule baseline net Sharpe (fixed test) | −1.03 | 0.90 |
 
-**Decision (honest weak edge).** The model ranks well on the held-out recent
-year and beats both the rule baseline and the index net of costs, but the edge
-is **not stable across time**: 21d walk-forward folds are negative early and
-positive later (fold ICs −0.014, −0.063, +0.012, +0.064, +0.043), and the 21d
-walk-forward t-stat (0.41) is far below the pre-agreed significance bar (> 2).
-The very strong 21d fixed-test Sharpe (3.57, −1% drawdown) is flattered by one
-favourable year and should not be trusted; the walk-forward figures are the
-honest ones. The modelling work is closed with this result.
+Purged K-fold was not part of the retrain run, so it is not reported here.
+
+**Decision (honest weak edge).** The models rank acceptably on the held-out recent
+year, but the edge is **not stable across time**. 21d walk-forward fold ICs are
++0.008, −0.049, −0.072, +0.068, +0.046 and the pooled t-stat (−0.08) is far below the
+pre-agreed significance bar (> 2); 5d walk-forward (t = 1.68) also misses it. The 21d
+fixed-test Sharpe (3.19) is flattered by one favourable year and should not be
+trusted; the walk-forward figures are the honest ones. At 21d the rule baseline
+(Sharpe 0.90) is not clearly beaten on a walk-forward basis. The modelling work is
+closed with this result.
 
 **Modelling iterations tried** (all recorded in `ml/experiments/`):
 1. **Kept** — dropped degenerate constant market features (18 → 14 features).
@@ -160,7 +164,7 @@ Key locations:
 
 ---
 
-## 6. Re-pin to the installed stack (2026-10-04)
+## 7. Re-pin to the installed stack (2026-10-04)
 
 The machine's service installs were replaced by older releases and could not be
 changed, so the project was ported down to them (the README version table is the
@@ -174,5 +178,6 @@ JVMs and unpaused DAGs in `start-stack.sh`; and `evaluate.py` now records `base_
 for non-ensemble selections (a latent bug that broke scoring whenever a non-GBT
 single model was selected). Data was rebuilt from scratch (HDFS was empty) and the
 model retrained; verified with the unit tests, `scripts/run_once.sh --history` and an
-Airflow-triggered `screening_on_demand` run via the API. Model metrics in section 3
-predate the retrain.
+Airflow-triggered `screening_on_demand` run via the API. Section 3 reflects the post-retrain
+metrics; the iteration t-stats listed there (0.41, −0.35, 0.07) are from the earlier
+pre-retrain data and are kept as history.
