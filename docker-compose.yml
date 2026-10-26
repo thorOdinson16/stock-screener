@@ -1,0 +1,149 @@
+# Docker packaging of the platform (Linux, macOS, Windows via Docker Desktop +
+# WSL2). The native install (start-stack.sh / start-ui.sh) is unaffected; see
+# docker/README.md.
+#
+# Every service joins the network namespace of `net` (network_mode
+# "service:net"), so they all talk over localhost on the same ports as the
+# native single-machine install, and need no address changes. Ports are
+# published on `net`.
+
+x-platform: &platform
+  image: ghcr.io/thorodinson16/stock-screener-platform:latest
+  network_mode: "service:net"
+  restart: unless-stopped
+  depends_on: [net]
+
+x-runtime-env: &runtime-env
+  SPARK_MASTER: ${SPARK_MASTER:-local[4]}
+  SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY:-4g}
+  AIRFLOW_USER: ${AIRFLOW_USER:-admin}
+  AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD:-admin}
+  AIRFLOW_API_URL: http://localhost:8080/api/v2
+  AIRFLOW_AUTH_URL: http://localhost:8080/auth/token
+
+services:
+  net:
+    image: ghcr.io/thorodinson16/stock-screener-platform:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: platform
+    command: ["net"]
+    restart: unless-stopped
+    ports:
+      - "5173:5173"   # dashboard
+      - "8000:8000"   # FastAPI
+      - "8080:8080"   # Airflow
+      - "8888:8888"   # Druid console
+      - "9870:9870"   # HDFS NameNode UI
+      - "9092:9092"   # Kafka
+      - "5801:5801"   # SeaTunnel Zeta
+
+  namenode:
+    <<: *platform
+    command: ["namenode"]
+    volumes: [hdfs-namenode:/data/hdfs/namenode]
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/9000'"]
+      interval: 5s
+      retries: 60
+
+  datanode:
+    <<: *platform
+    command: ["datanode"]
+    volumes: [hdfs-datanode:/data/hdfs/datanode]
+    depends_on:
+      namenode: {condition: service_healthy}
+
+  kafka:
+    <<: *platform
+    command: ["kafka"]
+    environment:
+      KAFKA_HEAP: ${KAFKA_HEAP:-1g}
+    volumes: [kafka-data:/data/kafka]
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/9092'"]
+      interval: 5s
+      retries: 60
+
+  seatunnel:
+    <<: *platform
+    command: ["seatunnel"]
+    environment:
+      SEATUNNEL_HEAP: ${SEATUNNEL_HEAP:-2g}
+    volumes: [seatunnel-data:/tmp/seatunnel]
+    depends_on:
+      namenode: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/5801'"]
+      interval: 5s
+      retries: 60
+
+  druid:
+    <<: *platform
+    command: ["druid"]
+    environment:
+      DRUID_MEMORY: ${DRUID_MEMORY:-6g}
+    volumes: [druid-data:/opt/druid/var]
+    depends_on:
+      kafka: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/status/health | grep -q true"]
+      interval: 10s
+      retries: 60
+
+  airflow:
+    <<: *platform
+    command: ["airflow"]
+    environment: *runtime-env
+    volumes:
+      - airflow-data:/data/airflow
+      - state:/data/state
+    depends_on:
+      namenode: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      seatunnel: {condition: service_healthy}
+      druid: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v2/monitor/health >/dev/null"]
+      interval: 10s
+      retries: 60
+
+  init:
+    <<: *platform
+    command: ["init"]
+    restart: "no"
+    environment: *runtime-env
+    volumes: [state:/data/state]
+    depends_on:
+      datanode: {condition: service_started}
+      seatunnel: {condition: service_healthy}
+      druid: {condition: service_healthy}
+
+  api:
+    <<: *platform
+    command: ["api"]
+    environment: *runtime-env
+    volumes: [state:/data/state]
+    depends_on:
+      airflow: {condition: service_healthy}
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: frontend
+    image: ghcr.io/thorodinson16/stock-screener-frontend:latest
+    network_mode: "service:net"
+    restart: unless-stopped
+    depends_on: [net, api]
+
+volumes:
+  hdfs-namenode:
+  hdfs-datanode:
+  kafka-data:
+  seatunnel-data:
+  druid-data:
+  airflow-data:
+  state:

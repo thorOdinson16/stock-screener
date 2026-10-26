@@ -1,0 +1,16 @@
+# Build context for docker/Dockerfile: the repo, minus local environments and
+# runtime output.
+.git
+**/.venv
+**/__pycache__
+**/*.pyc
+frontend/node_modules
+frontend/dist
+ml/models
+ml/evaluation/results
+monitoring/metrics
+monitoring/quality
+benchmarks/**/logs
+config/airflow.env
+runtime
+*.log
