@@ -71,6 +71,11 @@ pool. Logs: `~/stack-logs/<service>.log`.
 - Druid console - http://localhost:8888
 - Airflow UI - http://localhost:8080
 
+### Docker (Windows / macOS / Linux)
+
+The same stack also runs under Docker Compose, without a native install:
+`docker compose up -d --build`, then a one-time data load. See `docker/README.md`.
+
 ## Running the pipeline
 
 From the dashboard (recommended): **Run pipeline** (Quick = quotes only, or Full = quotes +
