@@ -49,26 +49,29 @@ def asof_join_fundamentals(
     columns = list(columns or FUNDAMENTAL_FEATURE_COLUMNS)
     right_cols = [by, fund_time] + [c for c in columns if c not in (by, fund_time)]
 
+    # merge_asof needs both sides sorted by the join key across all groups (not
+    # per group), so sort by time first and restore [by, on] order afterwards.
     left = panel.copy()
     left[on] = pd.to_datetime(left[on])
-    left = left.sort_values([by, on]).reset_index(drop=True)
+    # Shift the decision time so the same trading day's snapshot is eligible.
+    left["_asof_decision"] = left[on] + offset
+    left = left.sort_values(["_asof_decision", by]).reset_index(drop=True)
 
     right = fundamentals[[c for c in right_cols if c in fundamentals.columns]].copy()
     right[fund_time] = pd.to_datetime(right[fund_time])
-    right = right.sort_values([by, fund_time]).reset_index(drop=True)
+    right = right.sort_values([fund_time, by]).reset_index(drop=True)
 
-    # Shift the decision time so the same trading day's snapshot is eligible.
-    decision = left[on] + offset
     merged = pd.merge_asof(
         left,
         right,
-        left_on=decision,
+        left_on="_asof_decision",
         right_on=fund_time,
         by=by,
         direction="backward",
         allow_exact_matches=True,
         suffixes=("", "_fund"),
     )
+    merged = merged.drop(columns="_asof_decision").sort_values([by, on])
     return merged.reset_index(drop=True)
 
 

@@ -50,7 +50,7 @@ from features import (  # noqa: E402
     compute_labels,
     compute_split_dates,
 )
-from spark_schema import NORMALIZED_SCHEMA  # noqa: E402
+from spark_schema import FEATURE_MODULES, NORMALIZED_SCHEMA, attach_fundamentals  # noqa: E402
 sys.path.insert(0, _HERE)
 from nullability import match_not_null  # noqa: E402
 from transform import MODEL_FEATURES, transform_group  # noqa: E402
@@ -112,7 +112,7 @@ def build_spark(warehouse: str) -> SparkSession:
         .config("spark.sql.session.timeZone", "UTC")
         .getOrCreate()
     )
-    for module in ("features.py", "transform.py"):
+    for module in FEATURE_MODULES:
         spark.sparkContext.addPyFile(os.path.join(_FEATURES_DIR, module))
     return spark
 
@@ -169,7 +169,9 @@ def build_dataset(spark: SparkSession):
     test_start, embargo_start = compute_split_dates(dates)
 
     # Shared, scale-free + cross-sectionally normalized model features.
-    raw_for_transform = base.select("symbol", "trade_date", "close", *RAW_FEATURE_COLUMNS)
+    raw_for_transform = attach_fundamentals(
+        spark, base.select("symbol", "trade_date", "close", *RAW_FEATURE_COLUMNS)
+    )
     features = raw_for_transform.groupBy("trade_date").applyInPandas(
         transform_group, schema=NORMALIZED_SCHEMA
     )
@@ -232,6 +234,11 @@ def main():
         .collect()
     }
     print(f"ml.training_dataset rows: {total} {splits}")
+    with_fundamentals = (
+        spark.table("iceberg.ml.training_dataset").filter(F.col("earnings_yield") != 0).count()
+    )
+    print(f"rows with point-in-time fundamentals: {with_fundamentals} "
+          f"({with_fundamentals / max(total, 1):.1%})")
     print(f"test_start={test_start} embargo_start={embargo_start}")
 
     spark.stop()

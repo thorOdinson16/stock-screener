@@ -475,14 +475,42 @@ def main():
             [ENSEMBLE_NAME] if ENSEMBLE_NAME in label_results else []
         )
         best = select_best(label_results, candidates)
+        if best is not None and not args.skip_walk_forward:
+            # The fixed test split is a single year, so a pick made on it alone is
+            # noisy (see docs/model-research.md). Walk-forward the fixed-test
+            # winner and the rank ensemble, and keep the one whose edge holds up
+            # across time (higher walk-forward IC t-stat).
+            shortlist = [best] + (
+                [ENSEMBLE_NAME] if ENSEMBLE_NAME in candidates and best != ENSEMBLE_NAME else []
+            )
+            folds = {
+                name: fold_metrics(
+                    dataset, label, selected_members(name, models), args.k,
+                    args.cost_bps, mode="walk_forward", n_trials=n_trials,
+                )
+                for name in shortlist
+            }
+            fixed_test_best = best
+            best = max(
+                shortlist,
+                key=lambda n: folds[n].get("ic_t_stat")
+                if folds[n].get("ic_t_stat") is not None else -math.inf,
+            )
+            label_results["walk_forward"] = folds[best]
+            results.setdefault("selection", {})[label] = {
+                "rule": "walk-forward IC t-stat among {fixed-test best, rank_ensemble}",
+                "fixed_test_best": fixed_test_best,
+                "selected": best,
+                "walk_forward": {
+                    n: {k: folds[n].get(k) for k in
+                        ("ic_mean", "ic_t_stat", "net_sharpe", "folds_positive")}
+                    for n in shortlist
+                },
+            }
         if best is not None:
             members = selected_members(best, models)
             selected["labels"][label] = selected_entry(best, models)
             if not args.skip_walk_forward:
-                label_results["walk_forward"] = fold_metrics(
-                    dataset, label, members, args.k, args.cost_bps,
-                    mode="walk_forward", n_trials=n_trials,
-                )
                 if args.purged_kfold:
                     label_results["purged_kfold"] = fold_metrics(
                         dataset, label, members, args.k, args.cost_bps,
@@ -605,6 +633,16 @@ def _write_markdown(results, path):
                         f"folds positive {_fmt(fold.get('folds_positive'))}, "
                         f"net Sharpe {_fmt(fold.get('net_sharpe'))}."
                     )
+        sel = (results.get("selection") or {}).get(label)
+        if sel:
+            scored = ", ".join(
+                f"{n} t={_fmt(m.get('ic_t_stat'))}" for n, m in sel["walk_forward"].items()
+            )
+            lines.append("")
+            lines.append(
+                f"Selection: fixed-test best `{sel['fixed_test_best']}`; walk-forward "
+                f"{scored}; selected `{sel['selected']}`."
+            )
         lines.append("")
 
     if results.get("robustness"):

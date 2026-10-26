@@ -35,7 +35,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
 _FEATURES_DIR = os.path.join(_REPO_ROOT, "ml", "feature_engineering")
 sys.path.insert(0, _FEATURES_DIR)
 from features import BENCHMARK_SYMBOLS  # noqa: E402
-from spark_schema import NORMALIZED_SCHEMA  # noqa: E402
+from spark_schema import FEATURE_MODULES, NORMALIZED_SCHEMA, attach_fundamentals  # noqa: E402
 sys.path.insert(0, _HERE)
 from nullability import match_not_null  # noqa: E402
 from transform import MODEL_FEATURES, RAW_FEATURE_COLUMNS, transform_group  # noqa: E402
@@ -69,7 +69,7 @@ def build_spark(warehouse: str) -> SparkSession:
         .config("spark.sql.session.timeZone", "UTC")
         .getOrCreate()
     )
-    for module in ("features.py", "transform.py"):
+    for module in FEATURE_MODULES:
         spark.sparkContext.addPyFile(os.path.join(_FEATURES_DIR, module))
     return spark
 
@@ -86,6 +86,7 @@ def latest_cross_section(spark: SparkSession):
         *[F.col(c).cast("double").alias(c) for c in RAW_FEATURE_COLUMNS],
     )
     # Same transform chain as training (grouped by date; here a single date).
+    base = attach_fundamentals(spark, base)
     features = base.groupBy("trade_date").applyInPandas(
         transform_group, schema=NORMALIZED_SCHEMA
     )

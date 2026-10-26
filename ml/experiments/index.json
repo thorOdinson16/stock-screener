@@ -40,5 +40,23 @@
     "file": "20261004T072058Z_evaluate.json",
     "recorded_at": "2026-10-04T07:20:58.578328+00:00",
     "git_commit": "6efe17f9386c5f7d2bfbdbf3329c6a1af0c644eb"
+  },
+  {
+    "name": "research",
+    "file": "20261026T202305Z_research.json",
+    "recorded_at": "2026-10-26T20:23:05.812941+00:00",
+    "git_commit": "3543eada975f1f8601b3825f3ecc22daa719f95a"
+  },
+  {
+    "name": "research",
+    "file": "20261026T202944Z_research.json",
+    "recorded_at": "2026-10-26T20:29:44.429408+00:00",
+    "git_commit": "3543eada975f1f8601b3825f3ecc22daa719f95a"
+  },
+  {
+    "name": "evaluate",
+    "file": "20261026T205238Z_evaluate.json",
+    "recorded_at": "2026-10-26T20:52:38.391255+00:00",
+    "git_commit": "3543eada975f1f8601b3825f3ecc22daa719f95a"
   }
 ]

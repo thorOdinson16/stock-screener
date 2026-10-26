@@ -1,0 +1,258 @@
+{
+  "name": "research",
+  "recorded_at": "2026-10-26T20:29:44.429408+00:00",
+  "git_commit": "3543eada975f1f8601b3825f3ecc22daa719f95a",
+  "k": 20,
+  "cost_bps": 10.0,
+  "statement_coverage": {
+    "reversal_5d": 0.9955171211832644,
+    "momentum_12_1": 0.7766699846557975,
+    "volume_trend": 0.9471020299625199,
+    "beta_120d": 0.946171316043855,
+    "idio_vol_120d": 0.8935212968186833,
+    "max_return_21d": 0.9811719089697105,
+    "illiquidity_21d": 0.8752304325483953,
+    "sector_relative_momentum_3m": 0.9435157269091314,
+    "earnings_yield": 0.6755707360545635,
+    "book_to_price": 0.6697169407900647,
+    "return_on_equity": 0.6695480467584923,
+    "debt_to_equity": 0.6609254674232161,
+    "revenue_growth": 0.47951531006428755,
+    "log_market_cap": 0.6751934196010507
+  },
+  "feature_sets": {
+    "base": [
+      "close_over_sma_200",
+      "sma_50_over_sma_200",
+      "sma_20_over_sma_50",
+      "ema_12_over_ema_26",
+      "macd_over_sma_50",
+      "macd_signal_over_sma_50",
+      "rsi_14",
+      "volatility_20d",
+      "volume_ratio",
+      "distance_from_52w_high",
+      "distance_from_52w_low",
+      "price_momentum_1m",
+      "price_momentum_3m",
+      "price_momentum_6m"
+    ],
+    "tech": [
+      "close_over_sma_200",
+      "sma_50_over_sma_200",
+      "sma_20_over_sma_50",
+      "ema_12_over_ema_26",
+      "macd_over_sma_50",
+      "macd_signal_over_sma_50",
+      "rsi_14",
+      "volatility_20d",
+      "volume_ratio",
+      "distance_from_52w_high",
+      "distance_from_52w_low",
+      "price_momentum_1m",
+      "price_momentum_3m",
+      "price_momentum_6m",
+      "reversal_5d",
+      "momentum_12_1",
+      "volume_trend",
+      "beta_120d",
+      "idio_vol_120d",
+      "max_return_21d",
+      "illiquidity_21d",
+      "sector_relative_momentum_3m"
+    ],
+    "fund": [
+      "close_over_sma_200",
+      "sma_50_over_sma_200",
+      "sma_20_over_sma_50",
+      "ema_12_over_ema_26",
+      "macd_over_sma_50",
+      "macd_signal_over_sma_50",
+      "rsi_14",
+      "volatility_20d",
+      "volume_ratio",
+      "distance_from_52w_high",
+      "distance_from_52w_low",
+      "price_momentum_1m",
+      "price_momentum_3m",
+      "price_momentum_6m",
+      "earnings_yield",
+      "book_to_price",
+      "return_on_equity",
+      "debt_to_equity",
+      "revenue_growth",
+      "log_market_cap"
+    ],
+    "all": [
+      "close_over_sma_200",
+      "sma_50_over_sma_200",
+      "sma_20_over_sma_50",
+      "ema_12_over_ema_26",
+      "macd_over_sma_50",
+      "macd_signal_over_sma_50",
+      "rsi_14",
+      "volatility_20d",
+      "volume_ratio",
+      "distance_from_52w_high",
+      "distance_from_52w_low",
+      "price_momentum_1m",
+      "price_momentum_3m",
+      "price_momentum_6m",
+      "reversal_5d",
+      "momentum_12_1",
+      "volume_trend",
+      "beta_120d",
+      "idio_vol_120d",
+      "max_return_21d",
+      "illiquidity_21d",
+      "sector_relative_momentum_3m",
+      "earnings_yield",
+      "book_to_price",
+      "return_on_equity",
+      "debt_to_equity",
+      "revenue_growth",
+      "log_market_cap"
+    ]
+  },
+  "model_specs": {
+    "gbt_rank": {
+      "maxIter": 50,
+      "maxDepth": 4
+    },
+    "rf_rank": {
+      "numTrees": 60,
+      "maxDepth": 6
+    },
+    "linear": {
+      "regParam": 0.1
+    }
+  },
+  "results": [
+    {
+      "ic_mean": 0.016709380265019395,
+      "ic_t_stat": 1.0645137675331167,
+      "net_sharpe": 0.4927787494450671,
+      "folds_positive": 0.6,
+      "per_fold": [
+        {
+          "fold": 0,
+          "n": 54075,
+          "ic_mean": -0.023592707959397653,
+          "ic_t_stat": -1.082705650493261
+        },
+        {
+          "fold": 1,
+          "n": 55444,
+          "ic_mean": -0.04704007738246679,
+          "ic_t_stat": -0.9209154023179625
+        },
+        {
+          "fold": 2,
+          "n": 56589,
+          "ic_mean": 0.02475266371920943,
+          "ic_t_stat": 2.1932467399933504
+        },
+        {
+          "fold": 3,
+          "n": 58278,
+          "ic_mean": 0.07240776173711634,
+          "ic_t_stat": 6.467855684531242
+        },
+        {
+          "fold": 4,
+          "n": 49441,
+          "ic_mean": 0.06515875640157734,
+          "ic_t_stat": 2.1645607219491128
+        }
+      ],
+      "label": "excess_ret_21d",
+      "model": "rank_ensemble",
+      "feature_set": "base",
+      "n_features": 14
+    },
+    {
+      "ic_mean": 0.04325284522555514,
+      "ic_t_stat": 3.8811206232270163,
+      "net_sharpe": 1.6710989188123817,
+      "folds_positive": 1.0,
+      "per_fold": [
+        {
+          "fold": 0,
+          "n": 54075,
+          "ic_mean": 0.011074813909696741,
+          "ic_t_stat": 0.4351475530959849
+        },
+        {
+          "fold": 1,
+          "n": 55444,
+          "ic_mean": 0.01315942839449751,
+          "ic_t_stat": 0.966762320576557
+        },
+        {
+          "fold": 2,
+          "n": 56589,
+          "ic_mean": 0.09398747768126264,
+          "ic_t_stat": 9.013428891439746
+        },
+        {
+          "fold": 3,
+          "n": 58278,
+          "ic_mean": 0.08497177970035401,
+          "ic_t_stat": 3.6309077329055945
+        },
+        {
+          "fold": 4,
+          "n": 49441,
+          "ic_mean": 0.006976260149124445,
+          "ic_t_stat": 0.3662828498564649
+        }
+      ],
+      "label": "excess_ret_21d",
+      "model": "rank_ensemble",
+      "feature_set": "fund",
+      "n_features": 20
+    },
+    {
+      "ic_mean": 0.04156991387004393,
+      "ic_t_stat": 3.1179520161807237,
+      "net_sharpe": 1.56984355770679,
+      "folds_positive": 0.8,
+      "per_fold": [
+        {
+          "fold": 0,
+          "n": 54075,
+          "ic_mean": -0.01330094160498245,
+          "ic_t_stat": -0.4471678585096617
+        },
+        {
+          "fold": 1,
+          "n": 55444,
+          "ic_mean": 0.019337186873108612,
+          "ic_t_stat": 1.4978070972066015
+        },
+        {
+          "fold": 2,
+          "n": 56589,
+          "ic_mean": 0.09705358285715765,
+          "ic_t_stat": 4.4039992207291565
+        },
+        {
+          "fold": 3,
+          "n": 58278,
+          "ic_mean": 0.09439371144305997,
+          "ic_t_stat": 3.7753185183699824
+        },
+        {
+          "fold": 4,
+          "n": 49441,
+          "ic_mean": 0.004065245494841973,
+          "ic_t_stat": 0.226793716606494
+        }
+      ],
+      "label": "excess_ret_21d",
+      "model": "rank_ensemble",
+      "feature_set": "all",
+      "n_features": 28
+    }
+  ]
+}

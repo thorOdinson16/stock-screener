@@ -38,6 +38,7 @@ from rules import rule_score  # noqa: E402
 from indicators import compute_features  # noqa: E402
 from transform import (  # noqa: E402
     MODEL_FEATURES,
+    TECHNICAL_FEATURES,
     add_derived_features,
     add_regime_features,
     apply_cross_sectional,
@@ -46,6 +47,12 @@ from transform import (  # noqa: E402
 from walk_forward import expanding_folds, purged_kfold_folds  # noqa: E402
 from backtest import backtest  # noqa: E402
 from asof import asof_join_fundamentals  # noqa: E402
+from extra_features import (  # noqa: E402
+    STATEMENT_LAG_DAYS,
+    add_fundamental_features,
+    add_relative_features,
+    add_timeseries_features,
+)
 
 
 def _frame(closes, symbol="TEST.NS", start="2020-01-01"):
@@ -203,16 +210,18 @@ def test_transform_output_columns_match_model_features():
 
 def test_cross_sectional_zscore_mean_zero():
     panel = _feature_panel(symbols=("A", "B", "C"), periods=2)
-    out = apply_cross_sectional(add_regime_features(add_derived_features(panel)))
-    means = out.groupby("trade_date")[MODEL_FEATURES].mean().abs()
+    out = apply_cross_sectional(
+        add_regime_features(add_derived_features(panel)), columns=TECHNICAL_FEATURES
+    )
+    means = out.groupby("trade_date")[TECHNICAL_FEATURES].mean().abs()
     assert (means.values < 1e-9).all()
 
 
 def test_cross_sectional_rank_bounds_and_order():
     panel = _feature_panel(symbols=("A", "B", "C"), periods=1)
     derived = add_regime_features(add_derived_features(panel))
-    out = apply_cross_sectional(derived, method="rank")
-    values = out[MODEL_FEATURES].values
+    out = apply_cross_sectional(derived, columns=TECHNICAL_FEATURES, method="rank")
+    values = out[TECHNICAL_FEATURES].values
     assert (values >= -0.5).all() and (values <= 0.5).all()
     # rsi_14 increases with the symbol's row index -> preserved order after ranking
     order = np.argsort(derived["rsi_14"].values)
@@ -338,6 +347,78 @@ def test_asof_join_no_lookahead():
     )
     out = asof_join_fundamentals(panel, fundamentals)
     assert np.isnan(out["pe_ratio"].iloc[0])
+
+
+
+def test_asof_join_multiple_symbols():
+    # merge_asof needs a globally sorted key; a multi-symbol panel used to raise
+    # "left keys must be sorted".
+    panel = pd.DataFrame({
+        "symbol": ["A", "A", "B", "B"],
+        "trade_date": pd.to_datetime(["2024-01-05", "2024-06-03", "2024-01-05", "2024-06-03"]),
+    })
+    fundamentals = pd.DataFrame({
+        "symbol": ["A", "B"],
+        "timestamp": pd.to_datetime(["2024-03-01", "2023-12-01"]),
+        "eps": [10.0, 20.0],
+    })
+    out = asof_join_fundamentals(panel, fundamentals, columns=["eps"])
+    by_key = {(r.symbol, r.trade_date.date().isoformat()): r.eps for r in out.itertuples()}
+    assert pd.isna(by_key[("A", "2024-01-05")])
+    assert by_key[("A", "2024-06-03")] == 10.0
+    assert by_key[("B", "2024-01-05")] == 20.0
+    assert by_key[("B", "2024-06-03")] == 20.0
+
+
+def test_timeseries_reversal_and_beta():
+    rng = np.random.default_rng(0)
+    n = 300
+    dates = pd.date_range("2022-01-01", periods=n, freq="D")
+    index_ret = pd.Series(rng.normal(0, 0.01, n), index=dates)
+    # A stock that moves exactly 2x the index: beta 2, no idiosyncratic risk.
+    close = 100 * (1 + 2 * index_ret).cumprod()
+    frame = pd.DataFrame({"symbol": "X", "trade_date": dates, "close": close.values,
+                          "volume": 1000.0})
+    out = add_timeseries_features(frame, index_ret)
+    last = out.iloc[-1]
+    assert abs(last["beta_120d"] - 2.0) < 1e-6
+    assert last["idio_vol_120d"] < 1e-9
+    assert abs(last["reversal_5d"] - (close.iloc[-1] / close.iloc[-6] - 1)) < 1e-12
+    assert pd.isna(out["momentum_12_1"].iloc[251])  # needs 252 bars of history
+    assert not pd.isna(out["momentum_12_1"].iloc[252])
+
+
+def test_fundamentals_respect_publication_lag():
+    statements = pd.DataFrame({
+        "symbol": ["X"], "period_end": [pd.Timestamp("2024-03-31")],
+        "total_revenue": [120.0], "prev_total_revenue": [100.0], "net_income": [10.0],
+        "diluted_eps": [5.0], "stockholders_equity": [50.0], "total_debt": [25.0],
+        "shares_outstanding": [10.0],
+    })
+    available = pd.Timestamp("2024-03-31") + pd.Timedelta(days=STATEMENT_LAG_DAYS)
+    panel = pd.DataFrame({
+        "symbol": "X",
+        "trade_date": [available - pd.Timedelta(days=1), available],
+        "close": [100.0, 100.0],
+    })
+    out = add_fundamental_features(panel, statements).sort_values("trade_date")
+    before, after = out.iloc[0], out.iloc[1]
+    assert pd.isna(before["earnings_yield"])  # not yet published: no look-ahead
+    assert abs(after["earnings_yield"] - 0.05) < 1e-12      # 5 / 100
+    assert abs(after["book_to_price"] - 0.05) < 1e-12       # (50 / 10) / 100
+    assert abs(after["return_on_equity"] - 0.2) < 1e-12     # 10 / 50
+    assert abs(after["debt_to_equity"] - 0.5) < 1e-12       # 25 / 50
+    assert abs(after["revenue_growth"] - 0.2) < 1e-12       # 120 / 100 - 1
+    assert abs(after["log_market_cap"] - np.log(1000.0)) < 1e-12
+
+
+def test_sector_relative_momentum_demeans_within_industry():
+    cs = pd.DataFrame({
+        "industry": ["A", "A", "B", "B"],
+        "price_momentum_3m": [0.1, 0.3, -0.2, 0.0],
+    })
+    out = add_relative_features(cs)
+    assert np.allclose(out["sector_relative_momentum_3m"], [-0.1, 0.1, -0.1, 0.1])
 
 
 def _run_all():

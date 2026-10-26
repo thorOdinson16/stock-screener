@@ -9,6 +9,8 @@ so train/serve parity is structural rather than a convention: both jobs call
 
 Two stages:
 
+  0. (Spark jobs) point-in-time fundamentals are attached per symbol first
+     (spark_schema.attach_fundamentals -> extra_features.add_fundamental_features).
   1. `add_derived_features` replaces absolute price-level features (sma_*/ema_*
      and macd, which are in rupees) with scale-free ratio forms, so a pooled
      cross-symbol model cannot learn price scale.
@@ -22,6 +24,8 @@ Kept free of Spark imports so it can be unit-tested directly
 
 import numpy as np
 import pandas as pd
+
+from extra_features import FUNDAMENTAL_FEATURES
 
 # Raw technical indicators as stored in silver.quotes_enriched.
 RAW_FEATURE_COLUMNS = [
@@ -75,11 +79,21 @@ _PASSTHROUGH_FEATURES = [
 # 21d walk-forward IC and were reverted; see ml/experiments/.
 _PRUNED_FEATURES: set = set()
 
-# Symbol features that are cross-sectionally normalized per trade date.
-NORMALIZED_FEATURES = [
+# Technical symbol features (scale-free forms of the silver indicators).
+TECHNICAL_FEATURES = [
     f for f in (list(_RATIO_RECIPES) + list(_MACD_RECIPES) + _PASSTHROUGH_FEATURES)
     if f not in _PRUNED_FEATURES
 ]
+
+# Point-in-time fundamentals from annual statements (extra_features.py). Added
+# after walk-forward research (ml/evaluation/research.py): they lifted the 21d
+# walk-forward IC from -0.007 to +0.020 (linear) — see ml/experiments/.
+# Unavailable values (no statement published yet) are neutral (0) after
+# normalization, so rows are not dropped.
+NEUTRAL_FILL_FEATURES = list(FUNDAMENTAL_FEATURES)
+
+# Symbol features that are cross-sectionally normalized per trade date.
+NORMALIZED_FEATURES = TECHNICAL_FEATURES + NEUTRAL_FILL_FEATURES
 
 # Market-regime context, computed per trade date across the cross-section. These
 # are deliberately NOT cross-sectionally normalized: they are constant within a
@@ -176,6 +190,10 @@ def transform_group(pdf: pd.DataFrame) -> pd.DataFrame:
     group): derive, add regime context (if any), then cross-sectionally
     normalize."""
     out = add_derived_features(pdf)
+    for col in NEUTRAL_FILL_FEATURES:
+        if col not in out.columns:  # no statements attached (e.g. none ingested yet)
+            out[col] = np.nan
     out = add_regime_features(out)
     out = apply_cross_sectional(out, columns=NORMALIZED_FEATURES)
+    out[NEUTRAL_FILL_FEATURES] = out[NEUTRAL_FILL_FEATURES].fillna(0.0)
     return out[["symbol", "trade_date"] + MODEL_FEATURES]
