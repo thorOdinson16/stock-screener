@@ -151,6 +151,51 @@ def refresh_fundamentals_clean(spark: SparkSession) -> int:
     return spark.table("iceberg.silver.fundamentals_clean").count()
 
 
+STATEMENT_FIELDS = [
+    "total_revenue", "net_income", "diluted_eps",
+    "stockholders_equity", "total_debt", "shares_outstanding",
+]
+
+
+def refresh_financial_statements(spark: SparkSession) -> int:
+    """bronze.financial_statements -> silver.financial_statements: the latest
+    fetch of each (symbol, period_end), plus the prior fiscal year's revenue and
+    net income (only when that statement is ~12 months earlier)."""
+    try:
+        bronze = spark.table("iceberg.bronze.financial_statements")
+    except Exception:  # noqa: BLE001 — table not created yet (older install)
+        print("No bronze.financial_statements table — skipping.")
+        return 0
+    if bronze.rdd.isEmpty():
+        print("No financial statements yet — skipping silver.financial_statements.")
+        return 0
+
+    latest_fetch = Window.partitionBy("symbol", "period_end").orderBy(F.col("fetched_at").desc())
+    by_period = Window.partitionBy("symbol").orderBy("period_end")
+    prev_end = F.lag("period_end").over(by_period)
+    one_year_back = F.months_between("period_end", prev_end).between(10, 14)
+    statements = (
+        bronze.withColumn("rn", F.row_number().over(latest_fetch))
+        .filter(F.col("rn") == 1)
+        .select("symbol", "period_end", "fetched_at", *STATEMENT_FIELDS)
+        .withColumn("prev_total_revenue",
+                    F.when(one_year_back, F.lag("total_revenue").over(by_period)))
+        .withColumn("prev_net_income",
+                    F.when(one_year_back, F.lag("net_income").over(by_period)))
+        .select("symbol", "period_end", *STATEMENT_FIELDS,
+                "prev_total_revenue", "prev_net_income", "fetched_at")
+    )
+    statements = match_not_null(statements, spark, "iceberg.silver.financial_statements")
+    statements.createOrReplaceTempView("financial_statements_stage")
+    spark.sql(
+        """
+        INSERT OVERWRITE iceberg.silver.financial_statements
+        SELECT * FROM financial_statements_stage
+        """
+    )
+    return spark.table("iceberg.silver.financial_statements").count()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Compute silver technical indicators")
     parser.add_argument(
@@ -172,6 +217,8 @@ def main():
     if not args.skip_fundamentals:
         n_fund = refresh_fundamentals_clean(spark)
         print(f"silver.fundamentals_clean rows: {n_fund}")
+        n_stmt = refresh_financial_statements(spark)
+        print(f"silver.financial_statements rows: {n_stmt}")
 
     spark.stop()
 

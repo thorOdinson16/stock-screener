@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# poll.sh — one poll cycle. Full runs fetch quotes + fundamentals; quick runs
-# fetch quotes only.
+# poll.sh — one poll cycle. Full runs fetch quotes + fundamentals + annual
+# financial statements; quick runs fetch quotes only.
 #
 # Env: FULL_RUN=1 (quotes+fundamentals) | UNIVERSE_LIMIT=N
 
@@ -23,4 +23,11 @@ if [ -n "$limit" ]; then
 fi
 
 run_poller "${args[@]}"
+
+if [ "${FULL_RUN:-0}" = "1" ]; then
+  log "Polling annual financial statements"
+  fin_args=(--once --bootstrap-servers "$KAFKA_BOOTSTRAP")
+  [ -n "$limit" ] && fin_args+=(--universe-limit "$limit")
+  ( cd "$REPO_ROOT/poller" && "$POLLER_PYTHON" financials.py "${fin_args[@]}" )
+fi
 ok "Poll complete"

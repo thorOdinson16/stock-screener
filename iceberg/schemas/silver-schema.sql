@@ -66,3 +66,27 @@ TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'
 );
+
+-- Annual financial statements, cleaned: the latest fetch per (symbol, period_end),
+-- with the prior fiscal year's revenue / net income attached for growth rates.
+-- Computed by spark/jobs/compute_indicators.py from bronze.financial_statements.
+-- Point-in-time use (a publication lag after period_end) is applied by the model
+-- features (ml/feature_engineering/asof.py), not here.
+CREATE TABLE IF NOT EXISTS silver.financial_statements (
+  symbol STRING NOT NULL,
+  period_end DATE NOT NULL,
+  total_revenue DOUBLE,
+  net_income DOUBLE,
+  diluted_eps DOUBLE,
+  stockholders_equity DOUBLE,
+  total_debt DOUBLE,
+  shares_outstanding DOUBLE,
+  prev_total_revenue DOUBLE,
+  prev_net_income DOUBLE,
+  fetched_at TIMESTAMP NOT NULL
+)
+USING iceberg
+TBLPROPERTIES (
+  'format-version'='2',
+  'write.parquet.compression-codec'='snappy'
+);

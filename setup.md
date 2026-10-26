@@ -102,8 +102,13 @@ spark-sql "${SPARK_ICEBERG[@]}" -f iceberg/schemas/silver-schema.sql
 spark-sql "${SPARK_ICEBERG[@]}" -f iceberg/schemas/gold-schema.sql
 ```
 
-Creates `silver.quotes_enriched`, `silver.fundamentals_clean`,
-`gold.stock_scores`, `gold.top_picks`, `ml.training_dataset`.
+Creates `bronze.financial_statements`, `silver.quotes_enriched`,
+`silver.fundamentals_clean`, `silver.financial_statements`, `gold.stock_scores`,
+`gold.top_picks`, `ml.training_dataset`.
+
+Upgrading an existing install: re-run `./kafka/topics/create-topics.sh` and the three
+schema files above (all idempotent) to add the `market.financials` topic and the
+financial-statement tables, then do the statements backfill in §1.6–1.7.
 
 Verify:
 
@@ -178,6 +183,14 @@ python poller.py --once --quotes-only
 
 Backfills are re-runnable; the indicator job dedupes `(symbol, trade_date)`.
 
+The model also uses point-in-time fundamentals from annual financial statements
+(~4–5 fiscal years per company from yfinance). Load them once; Full runs refresh
+them afterwards:
+
+```bash
+python financials.py --once      # ~2,200 statements, ~7 min
+```
+
 If the NIFTY 500 bars are already ingested and you only need to add the index,
 publish just the index instead of re-sending the whole universe:
 
@@ -198,6 +211,7 @@ invalid records are routed to `market.deadletter`.
 $SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/quotes-daily-job.conf     # daily bars
 $SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/quotes-job.conf           # live quotes snapshot
 $SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/fundamentals-job.conf     # fundamentals
+$SEATUNNEL_HOME/bin/seatunnel.sh --config seatunnel/configs/financials-job.conf       # annual statements
 ```
 
 Each job prints a result table and exits. Commits are visible in
@@ -206,8 +220,8 @@ Each job prints a result table and exits. Commits are visible in
 ## 1.8 Compute silver indicators
 
 Reads `bronze.quotes_daily`, computes the technical indicators
-(`docs/project-spec.md` §6.3), and overwrites `silver.quotes_enriched` +
-`silver.fundamentals_clean`.
+(`docs/project-spec.md` §6.3), and overwrites `silver.quotes_enriched`,
+`silver.fundamentals_clean` and `silver.financial_statements`.
 
 ```bash
 spark-submit \

@@ -67,3 +67,24 @@ TBLPROPERTIES (
   'format-version'='2',
   'write.parquet.compression-codec'='snappy'
 );
+-- Annual financial statements (poller/financials.py -> market.financials), one row
+-- per (symbol, fiscal period end) per fetch. Point-in-time use is handled
+-- downstream: silver keeps the latest fetch per period and the model only uses a
+-- statement once it would have been published (see silver.financial_statements).
+CREATE TABLE IF NOT EXISTS bronze.financial_statements (
+  symbol STRING NOT NULL,
+  period_end DATE NOT NULL,
+  fetched_at TIMESTAMP NOT NULL,
+  total_revenue DOUBLE,
+  net_income DOUBLE,
+  diluted_eps DOUBLE,
+  stockholders_equity DOUBLE,
+  total_debt DOUBLE,
+  shares_outstanding DOUBLE,
+  ingested_at TIMESTAMP NOT NULL
+)
+USING iceberg
+TBLPROPERTIES (
+  'format-version'='2',
+  'write.parquet.compression-codec'='snappy'
+);

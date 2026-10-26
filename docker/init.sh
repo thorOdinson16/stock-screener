@@ -32,17 +32,24 @@ wait_for "Kafka" 180 port_open 9092
 wait_for "SeaTunnel" 180 port_open 5801
 wait_for "Druid overlord" 300 curl -fsS "$DRUID_URL/druid/indexer/v1/supervisor"
 
-if [ ! -f "$MARKERS/topics" ]; then
+# Topics and tables are (re)applied whenever their definitions change, so an
+# upgraded image adds new ones to an existing install. Both steps are idempotent
+# (--if-not-exists / CREATE ... IF NOT EXISTS).
+fingerprint() { cat "$@" | md5sum | cut -d' ' -f1; }
+
+topics_fp=$(fingerprint "$REPO_ROOT/kafka/topics/create-topics.sh")
+if [ "$(cat "$MARKERS/topics" 2>/dev/null)" != "$topics_fp" ]; then
   log "Creating Kafka topics"
   "$REPO_ROOT/kafka/topics/create-topics.sh"
-  touch "$MARKERS/topics"
+  echo "$topics_fp" > "$MARKERS/topics"
 fi
 
-if [ ! -f "$MARKERS/tables" ]; then
+tables_fp=$(fingerprint "$REPO_ROOT"/iceberg/schemas/*.sql)
+if [ "$(cat "$MARKERS/tables" 2>/dev/null)" != "$tables_fp" ]; then
   log "Creating Iceberg tables"
   hdfs dfs -mkdir -p /warehouse
   spark_submit "$ICEBERG_PKG" "$REPO_ROOT/docker/create_tables.py" --warehouse "$WAREHOUSE"
-  touch "$MARKERS/tables"
+  echo "$tables_fp" > "$MARKERS/tables"
 fi
 
 export DRUID_ROUTER="$DRUID_URL"
