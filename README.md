@@ -150,9 +150,8 @@ docs/             Project specification and design notes
 ## Notes / limitations
 
 - Data comes from `yfinance` (unofficial, delayed) — fine for research, not for trading decisions.
-- On the 5y training set the signal is weak: fixed-test IC is ≈ 0.03 (5d) / 0.06 (21d), but
-  walk-forward IC is ≈ 0.01 (5d) / 0 (21d), so the edge is not stable over time. The high
-  fixed-test net Sharpe (≈ 1.9 / 3.2) reflects one favourable year; treat it as a screener, not
-  a trading signal. See `docs/project-status.md` §3.
+- On the 5y training set the signal is modest but holds up across time: walk-forward IC ≈ 0.02
+  (5d) / 0.04 (21d), t ≈ 3.6, with technical features plus point-in-time fundamentals from
+  annual statements. See `docs/project-status.md` §3 and `docs/model-research.md`.
 - Single-broker Kafka (`replication.factor=1`) and a single HDFS DataNode: no fault tolerance yet.
 - `market.quotes` Kafka retention is 1 day; run the poller to repopulate it before its Druid datasource exists.

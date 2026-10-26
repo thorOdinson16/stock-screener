@@ -1,6 +1,6 @@
 # Project Status & Closure
 
-Status: **delivered (on-demand)** · Last updated: 2026-09-16
+Status: **delivered (on-demand)** · Last updated: 2026-10-27
 
 This document is the plan-of-record closure for the stock screening platform. It
 records what was delivered, the model outcome and the decision taken, what is
@@ -38,6 +38,9 @@ druid_wait → druid_suspend → collect_metrics`.
 - Environment installed/version-pinned; `./start-stack.sh` / `./stop-stack.sh`.
 - NIFTY 500 poller (single on-demand cycle) + historical daily backfill; 5 years
   ingested (562,929 daily bars; 499 symbols + NIFTY index).
+- Annual financial statements (`poller/financials.py` → `market.financials` →
+  `bronze/silver.financial_statements`): ~4.5 fiscal years per company, refreshed
+  on Full runs; used as point-in-time model features.
 - Kafka topics + SeaTunnel ingestion (Kafka → Iceberg bronze) with dead-letter routing.
 - Spark technical indicators (bronze → silver).
 - ML scoring: shared scale-free / cross-sectional transforms with train-serve
@@ -54,6 +57,9 @@ druid_wait → druid_suspend → collect_metrics`.
 - Experiments suite under `benchmarks/` (throughput, latency, model, recovery,
   Iceberg, scalability) — each writes a JSON + markdown summary.
 - Reproducible experiment registry under `ml/experiments/`.
+- Docker packaging for Windows/macOS/Linux (`docker-compose.yml`, `docker/`),
+  prebuilt images on GHCR (`ghcr.io/thorodinson16/stock-screener-{platform,frontend}`).
+  The native install is unchanged.
 
 ---
 
@@ -61,61 +67,68 @@ druid_wait → druid_suspend → collect_metrics`.
 
 **What it does:** scores each stock by how likely it is to beat the average
 stock over the next 5 and 21 trading days. Inputs are 14 scale-free technical
-features, cross-sectionally normalized per day; targets are cross-sectional
-excess returns.
+features plus 6 point-in-time fundamentals from annual statements (earnings
+yield, book-to-price, ROE, debt/equity, revenue growth, log market cap), all
+cross-sectionally normalized per day. Targets are cross-sectional excess returns.
 
-**Selected models (2026-10-04 retrain):** `rank_ensemble` (5d: `gbt_rank` + `rf_rank`),
-`linear` (21d). Selection is noisy: for 21d, `rank_ensemble` had a marginally higher IC
-(0.061 vs 0.057) but `linear` was picked.
+**Selected models (2026-10-27 retrain):** `rank_ensemble` (GBT-rank + RF-rank) for
+both horizons. Selection now uses walk-forward: the fixed-test winner and the rank
+ensemble are both walk-forwarded, and the one with the higher walk-forward IC
+t-stat is kept. On the fixed test year alone, `linear` (21d) and `gbt` (5d) looked
+best, but their walk-forward t-stats were only 0.52 and 0.42.
 
 **Results (5y data, K=20, 10 bps/side):**
 
-| metric | 5d (rank_ensemble) | 21d (linear) |
+| metric | 5d | 21d |
 |---|---|---|
-| Fixed-test IC (t) | 0.027 (3.16) | 0.057 (2.63) |
-| Fixed-test net Sharpe | 1.93 | 3.19 |
-| Walk-forward IC (t) | 0.012 (1.68) | −0.001 (−0.08) |
-| Walk-forward net Sharpe | −0.10 | 0.74 |
-| Full-history (414 symbols) IC (t) | 0.027 (3.06) | 0.054 (2.38) |
+| Walk-forward IC (t) | **0.021 (3.55)** | **0.042 (3.76)** |
+| Walk-forward folds positive | 4/5 | 5/5 |
+| Walk-forward fold ICs | −0.001, +0.023, +0.034, +0.035, +0.012 | +0.003, +0.030, +0.088, +0.072, +0.013 |
+| Walk-forward net Sharpe | 0.76 | 2.24 |
+| Fixed-test IC (t) | 0.020 (2.51) | 0.043 (2.41) |
+| Fixed-test net Sharpe | 1.49 | 1.04 |
+| Full-history (414 symbols) IC (t) | 0.019 (2.23) | 0.036 (2.04) |
 | Rule baseline net Sharpe (fixed test) | −1.03 | 0.90 |
 
-Purged K-fold was not part of the retrain run, so it is not reported here.
+Before this round (technical features only, 2026-10-04): walk-forward IC 0.012
+(t 1.68) at 5d and −0.001 (t −0.08) at 21d.
 
-**Decision (honest weak edge).** The models rank acceptably on the held-out recent
-year, but the edge is **not stable across time**. 21d walk-forward fold ICs are
-+0.008, −0.049, −0.072, +0.068, +0.046 and the pooled t-stat (−0.08) is far below the
-pre-agreed significance bar (> 2); 5d walk-forward (t = 1.68) also misses it. The 21d
-fixed-test Sharpe (3.19) is flattered by one favourable year and should not be
-trusted; the walk-forward figures are the honest ones. At 21d the rule baseline
-(Sharpe 0.90) is not clearly beaten on a walk-forward basis. The modelling work is
-closed with this result.
+**Decision.** Both horizons now clear the pre-agreed walk-forward bar (t > 2), and
+the 21d edge is positive in every fold. The gain comes from the fundamentals; the
+early folds, which were negative with technical features only, turned positive.
+The edge is still modest (IC 0.02–0.04). Caveats: about 15 configurations were
+tried; yfinance may serve restated rather than as-first-published statements; the
+universe is today's NIFTY 500 (survivorship bias). Full write-up:
+`docs/model-research.md`.
 
-**Modelling iterations tried** (all recorded in `ml/experiments/`):
+**Modelling iterations** (all recorded in `ml/experiments/`):
 1. **Kept** — dropped degenerate constant market features (18 → 14 features).
-   21d walk-forward t = 0.41.
 2. **Rejected** — added raw, time-varying market-state features. 21d t = −0.35.
 3. **Rejected** — importance-based feature pruning. 21d t = 0.07.
+4. **Kept** — point-in-time fundamentals from annual statements, published 90 days
+   after fiscal year end (research: 21d ensemble t 1.06 → 3.88).
+5. **Rejected** — extra technical features (reversal, 12-1 momentum, volume trend,
+   beta / idiosyncratic volatility, max return, illiquidity, sector-relative
+   momentum): no gain on top of fundamentals, and less stable folds.
+6. **Kept** — select the production model by walk-forward instead of the fixed
+   test year.
 
-The remaining levers (new silver features such as short-term reversal / volume
-trend / sector-relative momentum / beta, a longer 63d label, regime-segmented
-models, or per-fold hyperparameter re-tuning) were assessed as heavier work with
-uncertain payoff and were **not pursued** under the closing decision.
+Not yet pursued: a 63-day horizon. Fundamentals helped most there in the
+research screen (linear IC 0.045), but it needs serving and dashboard changes.
 
 ---
 
 ## 4. Deferred / out of scope
 
-- **Point-in-time fundamentals (`ml/feature_engineering/asof.py`)** — implemented
-  and unit-tested, but not enabled in training; blocked until Full runs accrue
-  fundamentals history. The model is technical-only by construction.
 - **Scheduled/timetable Airflow DAGs** — removed: the platform is fully on-demand.
 - **Spark Structured Streaming** — removed; there is no always-on stream processor.
 - **Iceberg orphan-file cleanup** — omitted (bundled runtime lacks
   `org.apache.iceberg.actions.RemoveOrphanFiles`).
 - **Survivorship bias** — the universe is the *current* NIFTY 500; historical
   index membership isn't available. A full-history robustness subset is reported.
-- **Experiment 4 (fault recovery) and Experiment 6 (scalability)** — scripts are
-  provided but were not executed; Experiments 1, 2, 3 and 5 were run.
+- **Kafka partition sweep (Experiment 6)** — not run: partition counts can only
+  be increased, so it would permanently alter the topics. Spark parallelism was
+  swept instead.
 
 ---
 
@@ -178,6 +191,41 @@ JVMs and unpaused DAGs in `start-stack.sh`; and `evaluate.py` now records `base_
 for non-ensemble selections (a latent bug that broke scoring whenever a non-GBT
 single model was selected). Data was rebuilt from scratch (HDFS was empty) and the
 model retrained; verified with the unit tests, `scripts/run_once.sh --history` and an
-Airflow-triggered `screening_on_demand` run via the API. Section 3 reflects the post-retrain
-metrics; the iteration t-stats listed there (0.41, −0.35, 0.07) are from the earlier
-pre-retrain data and are kept as history.
+Airflow-triggered `screening_on_demand` run via the API. Model metrics in section 3 are from the
+later 2026-10-27 retrain (section 8).
+
+---
+
+## 8. Experiments 4 & 6, fundamentals, Docker (2026-10-27)
+
+**Experiment 4 — fault recovery** (`benchmarks/recovery/summary.md`). Each
+component was crash-killed (`kill -9`) partway into a pipeline stage, restarted,
+and the run retried (50-symbol runs).
+
+| killed | during | run failed at | recovered | Druid check |
+|---|---|---|---|---|
+| Kafka | ingest | `serving` (first stage that publishes) | yes | one snapshot added, no duplicates |
+| SeaTunnel | ingest | `ingest` | yes | one snapshot; consumer backlog drained to 0 |
+| Druid MiddleManager | `wait_druid` | did not fail | yes | Druid's `supervise` restarted it; ingestion tasks survived |
+
+Failures surface at the right stage, nothing is half-reported as success, and the
+retried run leaves clean counts (one screener snapshot = 499 rows, one score set =
+980 rows). The benchmark runner now resumes/suspends the Druid supervisors around a
+run, like `scripts/run_once.sh`; without that, `wait_druid` could never succeed.
+
+**Experiment 6 — scalability** (`benchmarks/scalability/summary.md`). 100-symbol
+quick runs at Spark `local[2]`, `local[4]` and `local[8]`: 320 s, 317 s and 316 s in
+total. Spark stages gain ~20% from 2 → 4 cores and nothing beyond (JVM start-up and
+Python UDF overhead dominate at this size). **The bottleneck is Druid:** ~191 s of
+every run (~60%) is waiting for Druid ingestion tasks to start and serve the new
+snapshot, constant across configurations; the yfinance poll is another ~55 s.
+
+**Fundamentals and model selection.** See section 3 and `docs/model-research.md`.
+Also fixed: `asof.py` failed on multi-symbol panels (merge_asof needs a globally
+sorted key).
+
+**Docker.** The platform runs under Docker Compose with prebuilt GHCR images; see
+`docker/README.md`. `docker/init.sh` re-applies topic/table definitions whenever
+they change, so an upgraded image adds the new financial-statement tables and
+topic to an existing install.
+
