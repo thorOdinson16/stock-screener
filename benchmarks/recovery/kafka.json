@@ -1,0 +1,44 @@
+{
+  "recorded_at": "2026-10-26T19:38:28.705674+00:00",
+  "git_commit": "3543eada975f1f8601b3825f3ecc22daa719f95a",
+  "component": "kafka",
+  "kill_during": "ingest",
+  "kill_delay": 5.0,
+  "limit": 50,
+  "failed_stage": "serving",
+  "pipeline_failed_while_down": true,
+  "recovered": true,
+  "recovery_seconds": 358.0,
+  "before": {
+    "kafka": {
+      "lag": 5333,
+      "partitions": 13,
+      "returncode": 0
+    },
+    "druid": {
+      "screener": 998,
+      "stock_scores": 1960,
+      "price_history": 556562,
+      "market_quotes": 1547
+    }
+  },
+  "after": {
+    "kafka": {
+      "lag": 5333,
+      "partitions": 13,
+      "returncode": 0
+    },
+    "druid": {
+      "screener": 1497,
+      "stock_scores": 2940,
+      "price_history": 556562,
+      "market_quotes": 2194
+    }
+  },
+  "druid_count_delta": {
+    "screener": 499,
+    "stock_scores": 980,
+    "price_history": 0,
+    "market_quotes": 647
+  }
+}

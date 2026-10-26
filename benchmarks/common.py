@@ -90,20 +90,33 @@ def stage_command(stage: str, full: bool, limit, publish_history: bool, extra_en
 def run_pipeline(full=False, limit=None, publish_history=False, log_dir=None,
                  extra_env=None) -> dict:
     """Runs the on-demand pipeline stage by stage, timing each one. Raises if a
-    stage fails so a benchmark never records a partial run as success."""
+    stage fails so a benchmark never records a partial run as success.
+
+    Like scripts/run_once.sh, the Druid supervisors are resumed for the run and
+    suspended afterwards (they are kept suspended at rest); that bracketing is
+    not part of the timed stages."""
+    supervisors = f"{REPO_ROOT}/scripts/druid_supervisors.sh"
+    run_cmd(["bash", supervisors, "resume"])
     stages = []
     started = time.perf_counter()
-    for stage in STAGES:
-        cmd, env = stage_command(stage, full, limit, publish_history, extra_env)
-        log_path = os.path.join(log_dir, f"{stage}.log") if log_dir else None
-        result = run_cmd(cmd, env=env, log_path=log_path)
-        stages.append({"stage": stage, "seconds": result["seconds"],
-                       "returncode": result["returncode"]})
-        if result["returncode"] != 0:
-            raise RuntimeError(
-                f"stage {stage} failed (rc={result['returncode']}): {result['tail']}"
-            )
-    return {"stages": stages, "total_seconds": time.perf_counter() - started}
+    try:
+        for stage in STAGES:
+            cmd, env = stage_command(stage, full, limit, publish_history, extra_env)
+            log_path = os.path.join(log_dir, f"{stage}.log") if log_dir else None
+            result = run_cmd(cmd, env=env, log_path=log_path)
+            stages.append({"stage": stage, "seconds": result["seconds"],
+                           "returncode": result["returncode"]})
+            if result["returncode"] != 0:
+                raise RuntimeError(
+                    f"stage {stage} failed (rc={result['returncode']}): {result['tail']}"
+                )
+        return {"stages": stages, "total_seconds": time.perf_counter() - started}
+    finally:
+        try:
+            run_cmd(["bash", supervisors, "wait"], timeout=300)
+        except subprocess.TimeoutExpired:
+            pass  # e.g. Kafka down in the recovery experiment; suspend anyway
+        run_cmd(["bash", supervisors, "suspend"])
 
 
 def druid_sql(query: str, druid_url: str | None = None, timeout: int = 20):
