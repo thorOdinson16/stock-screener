@@ -73,8 +73,21 @@ pool. Logs: `~/stack-logs/<service>.log`.
 
 ### Docker (Windows / macOS / Linux)
 
-The same stack also runs under Docker Compose, without a native install:
-`docker compose up -d --build`, then a one-time data load. See `docker/README.md`.
+The same stack also runs under Docker Compose, without a native install, using prebuilt
+images from GitHub Container Registry. On Windows, use Docker Desktop with the WSL2 backend
+and give it about 14 GB of memory.
+
+```bash
+git clone https://github.com/thorOdinson16/stock-screener.git
+cd stock-screener
+docker compose pull                                     # ~3 GB download, no build
+docker compose up -d
+docker compose logs -f init                             # wait for "Init complete"
+docker compose exec airflow docker/bootstrap-data.sh    # one-time 5y data load + training
+```
+
+Then open http://localhost:5173 and press **Run pipeline** (Full, with price history).
+Requirements, building from source, settings and troubleshooting: `docker/README.md`.
 
 ## Running the pipeline
 
