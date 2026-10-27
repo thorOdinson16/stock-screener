@@ -13,6 +13,11 @@ Usage:
     python backfill.py --once --period 1y
     python backfill.py --once --include-index      # also backfill the benchmark index (^NSEI)
     python backfill.py --once --index-only          # backfill only the benchmark index
+    python backfill.py --once --include-index --start 2026-10-01  # bars since a date
+
+`--start` is how on-demand runs keep the daily history current (scripts/poll.sh):
+they re-fetch from a few days before the latest stored bar. Overlapping bars are
+fine — silver keeps the most recently ingested row per (symbol, trade_date).
 
 See docs/project-spec.md §3.2 (historical backfills) and §6.3 (derived features).
 """
@@ -63,15 +68,17 @@ def _num(value, cast=float):
         return None
 
 
-def fetch_history(stock: Stock, period: str, interval: str, retries: int = 3):
-    """Returns a list of daily-bar dicts for one symbol (possibly empty)."""
+def fetch_history(stock: Stock, period: str, interval: str, retries: int = 3, start: str | None = None):
+    """Returns a list of daily-bar dicts for one symbol (possibly empty). `start`
+    (YYYY-MM-DD) takes precedence over `period`."""
+    window = {"start": start} if start else {"period": period}
     for attempt in range(1, retries + 1):
         try:
             frame = yf.Ticker(stock.yf_symbol).history(
-                period=period, interval=interval, auto_adjust=True
+                interval=interval, auto_adjust=True, **window
             )
             if frame is None or frame.empty:
-                logger.warning("No history for %s (period=%s).", stock.yf_symbol, period)
+                logger.warning("No history for %s (%s).", stock.yf_symbol, window)
                 return []
 
             records = []
@@ -110,6 +117,10 @@ def main():
     parser = argparse.ArgumentParser(description="Historical daily OHLCV backfill")
     parser.add_argument("--once", action="store_true", help="Run the backfill and exit")
     parser.add_argument("--period", default="2y", help="yfinance period (default: 2y)")
+    parser.add_argument(
+        "--start", default=None,
+        help="Fetch bars from this date (YYYY-MM-DD) instead of --period",
+    )
     parser.add_argument("--interval", default="1d", help="yfinance interval (default: 1d)")
     parser.add_argument("--batch-size", type=int, default=50, help="Symbols per Kafka flush")
     parser.add_argument("--delay", type=float, default=0.5, help="Seconds between symbols")
@@ -144,7 +155,12 @@ def main():
             logger.info(
                 "Including benchmark index symbols: %s", [s.yf_symbol for s in INDEX_SYMBOLS]
             )
-    logger.info("Backfilling %d symbols: period=%s interval=%s", len(universe), args.period, args.interval)
+    logger.info(
+        "Backfilling %d symbols: %s interval=%s",
+        len(universe),
+        f"start={args.start}" if args.start else f"period={args.period}",
+        args.interval,
+    )
 
     producer = MarketDataProducer(bootstrap_servers=args.bootstrap_servers)
 
@@ -154,7 +170,7 @@ def main():
     started = time.time()
 
     for i, stock in enumerate(universe, start=1):
-        records = fetch_history(stock, args.period, args.interval)
+        records = fetch_history(stock, args.period, args.interval, start=args.start)
         if records:
             pending.extend(records)
             succeeded += 1

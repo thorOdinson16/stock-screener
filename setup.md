@@ -181,7 +181,10 @@ Optionally publish one live quote snapshot as well:
 python poller.py --once --quotes-only
 ```
 
-Backfills are re-runnable; the indicator job dedupes `(symbol, trade_date)`.
+Backfills are re-runnable; the indicator job keeps the most recently ingested
+row per `(symbol, trade_date)`. You only need this once: every pipeline run then
+fetches the bars added since the last scored date (see §2.2). Re-run the 5-year
+backfill if a stock splits, so its older bars get the new price adjustment.
 
 The model also uses point-in-time fundamentals from annual financial statements
 (~4–5 fiscal years per company from yfinance). Load them once; Full runs refresh
@@ -329,7 +332,9 @@ Stages (each a `scripts/` wrapper run as an Airflow task):
 
 1. `preflight` — services up and a model is selected
 2. `druid_resume` — resume the suspended Druid supervisors
-3. `poll` — fetch quotes (and fundamentals on Full runs)
+3. `poll` — fetch quotes and the daily bars since the last scored date (from 10
+   days before it, `DAILY_BARS_LOOKBACK_DAYS`); Full runs also fetch fundamentals
+   and annual statements
 4. `ingest` — SeaTunnel drains Kafka into Iceberg bronze
 5. `indicators` — Spark computes indicators into silver
 6. `score` — Spark MLlib scores/ranks the latest cross-section into gold

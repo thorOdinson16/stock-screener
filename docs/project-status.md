@@ -120,12 +120,6 @@ research screen (linear IC 0.045), but it needs serving and dashboard changes.
 
 ## 4. Deferred / out of scope
 
-- **Known issue — runs don't add new daily bars.** Indicators and scoring read
-  `bronze.quotes_daily`, which only the historical backfill (`poller/backfill.py`)
-  fills. A pipeline run's live quotes go to `bronze.market_quotes` and Druid, not
-  into the daily bars, so scores stay at the date of the last backfill (currently
-  2026-10-01) until the backfill is re-run. Proposed fix: an incremental
-  daily-bar fetch + `quotes-daily-job` in each run.
 - **Scheduled/timetable Airflow DAGs** — removed: the platform is fully on-demand.
 - **Spark Structured Streaming** — removed; there is no always-on stream processor.
 - **Iceberg orphan-file cleanup** — omitted (bundled runtime lacks
@@ -237,3 +231,13 @@ API) before being pushed. `docker/init.sh` re-applies topic/table definitions wh
 they change, so an upgraded image adds the new financial-statement tables and
 topic to an existing install.
 
+
+**Daily bars stay current (2026-10-28).** Runs previously never added daily bars,
+so every run re-scored the date of the last backfill (2026-10-01). Each run now
+fetches the bars since 10 days before the latest scored date (`scripts/poll.sh` →
+`backfill.py --start`) and ingests them with `quotes-daily-job`; the indicator job
+keeps the most recently ingested row per `(symbol, trade_date)`, so a partial
+intraday bar is replaced by the final close on the next run. Verified with a Full
+run: 12,480 bars for 500 symbols in 162 s, scores moved from 2026-10-01 to
+2026-10-26, and silver has no duplicate keys. Older bars keep their original
+split adjustment; re-run the 5-year backfill after a split (setup.md §1.6).

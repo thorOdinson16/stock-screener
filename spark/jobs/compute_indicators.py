@@ -90,17 +90,21 @@ def build_spark(warehouse: str) -> SparkSession:
 
 
 def compute_quotes_enriched(spark: SparkSession) -> int:
+    # Every run re-fetches the last few days of bars (and backfills are
+    # re-runnable), so bronze holds duplicate (symbol, trade_date) rows. Keep the
+    # most recently ingested one: it replaces an intraday partial bar with the
+    # final close, and a re-run backfill replaces stale split/dividend adjustments.
+    latest = Window.partitionBy("symbol", "trade_date").orderBy(F.col("ingested_at").desc())
     daily = (
         spark.table("iceberg.bronze.quotes_daily")
+        .withColumn("rn", F.row_number().over(latest))
+        .filter(F.col("rn") == 1)
         .select(
             "symbol",
             "trade_date",
             F.col("close").cast("double").alias("close"),
             "volume",
         )
-        # Backfills are re-runnable, so bronze can legitimately contain duplicate
-        # (symbol, trade_date) rows; dedupe before rolling windows.
-        .dropDuplicates(["symbol", "trade_date"])
     )
 
     features = (
