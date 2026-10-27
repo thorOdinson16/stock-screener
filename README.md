@@ -29,7 +29,8 @@ Stages (each is a `scripts/` wrapper run as an Airflow task):
 
 1. **preflight** – check HDFS/Kafka/Druid/SeaTunnel are up and a model is selected
 2. **druid_resume** – resume the suspended Druid Kafka supervisors
-3. **poll** – fetch quotes (and fundamentals on Full runs) via `yfinance`
+3. **poll** – fetch quotes and the daily bars added since the last scored date (fundamentals
+   and annual statements too on Full runs) via `yfinance`
 4. **ingest** – SeaTunnel drains Kafka into Iceberg bronze
 5. **indicators** – Spark computes SMA/EMA/RSI/MACD/volatility/momentum into silver
 6. **score** – Spark MLlib scores and ranks the latest cross-section into gold
@@ -150,6 +151,11 @@ docs/             Project specification and design notes
 ## Notes / limitations
 
 - Data comes from `yfinance` (unofficial, delayed) — fine for research, not for trading decisions.
+- Yahoo rate-limits heavy use. If a run's poll step logs "no price data found" or timeouts for
+  most stocks, stop it and retry later (usually within an hour). A Full run makes ~3–4 requests
+  per stock; a Quick run about half that.
+- Daily bars keep the split adjustment they were fetched with. After a stock splits, re-run the
+  5-year backfill (`setup.md` §1.6).
 - On the 5y training set the signal is modest but holds up across time: walk-forward IC ≈ 0.02
   (5d) / 0.04 (21d), t ≈ 3.6, with technical features plus point-in-time fundamentals from
   annual statements. See `docs/project-status.md` §3 and `docs/model-research.md`.

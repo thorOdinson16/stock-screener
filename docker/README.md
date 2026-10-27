@@ -154,5 +154,8 @@ After `docker compose down -v`, repeat the first-time data load.
   `docker build --network host -f docker/Dockerfile --target platform -t ghcr.io/thorodinson16/stock-screener-platform:latest .`
   (and `--target frontend -t ghcr.io/thorodinson16/stock-screener-frontend:latest` for the dashboard),
   then run `docker compose up -d` without `--build`.
+- **The poll step logs "no price data found" or timeouts for most stocks:** Yahoo
+  is rate-limiting your IP. Stop the run and retry later (usually within an hour);
+  a Quick run or a smaller universe limit sends fewer requests.
 - **Port already in use:** another program (or the native stack) holds one of the
   published ports.
