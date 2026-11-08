@@ -29,6 +29,8 @@ from api import druid
 from api.druid import DruidError, LATEST_SNAPSHOT, query, quote
 from api import universe
 from api.pipeline import router as pipeline_router
+from api.planner import router as planner_router
+from api.forecasts import router as forecasts_router
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _COMPARISON_PATH = os.path.join(
@@ -63,6 +65,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(pipeline_router)
+app.include_router(planner_router)
+app.include_router(forecasts_router)
 
 
 def _qcols(columns: list[str]) -> str:
@@ -302,3 +306,9 @@ def universe_info():
             for k, v in sorted(by_industry.items(), key=lambda kv: -kv[1])
         ],
     }
+
+
+@app.get("/api/model/forward")
+def forward_performance():
+    from ml.evaluation.forward_tracking import read_report
+    return read_report()
