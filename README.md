@@ -29,7 +29,7 @@ Stages (each is a `scripts/` wrapper run as an Airflow task):
 
 1. **preflight** – check HDFS/Kafka/Druid/SeaTunnel are up and a model is selected
 2. **druid_resume** – resume the suspended Druid Kafka supervisors
-3. **poll** – fetch quotes and the daily bars added since the last scored date (fundamentals
+3. **poll** – fetch quotes and missing daily bars since each symbol’s latest ingested date (fundamentals
    and annual statements too on Full runs) via `yfinance`
 4. **ingest** – SeaTunnel drains Kafka into Iceberg bronze
 5. **indicators** – Spark computes SMA/EMA/RSI/MACD/volatility/momentum into silver
@@ -116,7 +116,9 @@ Pages: **Dashboard** (breadth, gainers/losers, sector performance), **Top Picks*
 **Screener** (filter by industry/score/P-E/RSI/momentum; CSV export), **Stock Detail**
 (price + SMA overlays, RSI, MACD, fundamentals), **Model** (IC + Newey–West t-stat,
 sector-neutral IC, net-of-cost Sharpe vs the rule baseline), **Ops** (Kafka lag, Druid
-segments/latency, HDFS health, pipeline runs). Data updates only when you run the
+segments/latency, HDFS health, pipeline runs), and **Track Record** (prospective
+top-20 outcomes, costs, benchmark comparisons and monthly consistency), plus
+**Trade Planner** (capital, whole-share sizing, exposure and risk limits). Data updates only when you run the
 pipeline and then click **Refresh data** in the sidebar — no background polling.
 
 See `setup.md` for the full ingestion + ML runbook.
@@ -137,7 +139,7 @@ spark/jobs/       Spark batch jobs (indicators, training set, scoring, serving p
 iceberg/schemas/  Bronze / silver / gold + ML table DDL
 ml/               Feature engineering, MLlib training/evaluation, saved models
 api/              FastAPI backend (Druid queries + Airflow pipeline trigger)
-frontend/         React + Vite dashboard (6 pages)
+frontend/         React + Vite dashboard (9 pages)
 airflow/dags/     On-demand + retrain DAGs
 druid/ingestion/  Druid Kafka supervisor specs + on-demand suspend/resume control
 scripts/          Pipeline step wrappers (poll/ingest/indicators/score/serve/retrain)
@@ -161,3 +163,79 @@ docs/             Project specification and design notes
   annual statements. See `docs/project-status.md` §3 and `docs/model-research.md`.
 - Single-broker Kafka (`replication.factor=1`) and a single HDFS DataNode: no fault tolerance yet.
 - `market.quotes` Kafka retention is 1 day; run the poller to repopulate it before its Druid datasource exists.
+
+## Incremental daily ingestion
+
+Each pipeline run reads per-symbol progress from `bronze.quotes_daily` in Iceberg,
+then downloads only the missing interval plus a 5-calendar-day overlap to finalize
+partial bars and capture recent corrections. New symbols bootstrap 5 years by
+default. Failed fetches do not advance their stored progress. Druid availability
+and scoring dates do not determine download progress.
+
+After SeaTunnel ingestion, an atomic Iceberg overwrite keeps the newest bar per
+`(symbol, trade_date)`, including cleanup of duplicates from previous runs. This
+currently reads the daily bronze table; Spark indicator computation also still
+processes full history. Older trading dates are retained for training/backtests.
+Iceberg maintenance expires old snapshots rather than deleting historical bars.
+
+Configure `DAILY_BARS_LOOKBACK_DAYS` and `DAILY_BARS_BOOTSTRAP_PERIOD` in
+`config/pipeline.env`. Explicit `backfill.py --start ...` or `--period ...` remains
+available for repairs, including refreshing old split adjustments.
+
+## Forward track record
+
+The dashboard's **Track Record** page evaluates lists saved from successful
+pipeline publications. It starts prospectively with the next run; old backtests
+are not presented as live predictions. Each saved list keeps its original picks,
+scores, model metadata, publication universe, and a 10-bps-per-side cost assumption.
+
+Paper entry is the first completed session close strictly after the publication's
+India date, followed by a 5- or 21-session hold. Results update on subsequent
+pipeline runs; today's possibly partial bars are excluded. Missing prices stay
+visible as incomplete cohorts. Completed outcomes are retained across retraining.
+
+The page reports long-only net returns, gross universe/NIFTY 50 benchmarks, pick
+hit rate, worst holding-period results and monthly consistency. Overlapping lists
+are not compounded; a non-overlapping subset is also counted. Method and caveats:
+[docs/forward-tracking.md](docs/forward-tracking.md).
+
+## Retail planning and data quality
+
+**Trade Planner** turns served 5/21-session rankings into paper allocations with
+whole shares, existing holdings, cash, stock/industry caps, liquidity/volatility
+checks, estimated costs and stop references. It can return no suitable setup.
+Scores remain uncalibrated rankings, with no invented probability or target price.
+
+Adjusted-price revisions trigger a full refresh of the affected symbol. Known
+unresolved demergers reset indicators and withhold affected returns/training
+labels; resulting share values are never guessed. Model provenance identifies
+whether retraining used this policy. Temporary 21-day, sector-relative and
+63-day experiments appear on the Model page without replacing production models.
+
+Activation, methodology, remaining data requirements and tests:
+[docs/retail-research.md](docs/retail-research.md).
+
+**Forecast Lab** assesses profit probabilities and net-return bands against later
+historical outcomes. Both tested probability models failed the baseline checks;
+live confidence figures remain withheld. The page exposes the evidence and
+corporate-action valuation gaps. Reproduction and results:
+[docs/forecast-calibration.md](docs/forecast-calibration.md).
+
+Forecast Lab also compares the 21-session walk-forward model with simple momentum
+and an all-eligible equal-target portfolio under common execution rules. A separate
+equal-notional diagnostic distinguishes stock selection from cash allocation.
+[Protocol and measured results](docs/baseline-comparison.md).
+
+The **architecture tournament** compares ridge, LightGBM, CatBoost and a small
+temporal convolutional model with matched controls, execution-aligned targets,
+cost/delay stress tests, and the actual ten-position planner. Experimental paper
+tracking stays separate from production. [Method and commands](docs/model-tournament.md).
+
+The remaining plan stages have also been run: verified NSE financial subset,
+market/sector context, categorical inputs, separate profit/outperformance models,
+calibration and robustness checks. Fresh paired paper signals are recorded; their
+21-session outcomes are pending. [Completion evidence and limits](docs/research-plan-completion.md).
+
+Six fixed mathematical ranking equations have also been tested against matched
+momentum controls. None established a stronger later trading result.
+[Equations, reproducible experiment and results](docs/quant-equations.md).
