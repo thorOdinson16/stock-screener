@@ -15,15 +15,19 @@ Usage:
     python backfill.py --once --index-only          # backfill only the benchmark index
     python backfill.py --once --include-index --start 2026-10-01  # bars since a date
 
-`--start` is how on-demand runs keep the daily history current (scripts/poll.sh):
-they re-fetch from a few days before the latest stored bar. Overlapping bars are
-fine — silver keeps the most recently ingested row per (symbol, trade_date).
+On-demand runs keep daily history current using --watermarks (scripts/poll.sh),
+which supplies a separate committed date for each symbol. Pipeline runs
+re-fetch a small overlap, then deduplicate bronze by (symbol, trade_date).
+Explicit --start / --period backfills remain available for historical repairs.
 
 See docs/project-spec.md §3.2 (historical backfills) and §6.3 (derived features).
 """
 
 import argparse
+import json
 import logging
+import math
+from pathlib import Path
 import time
 from datetime import date, datetime, timezone
 
@@ -31,6 +35,7 @@ import yfinance as yf
 
 from kafka_producer import MarketDataProducer
 from universe.universe import Stock, get_universe
+from incremental import history_start, adjustment_revision
 
 logging.basicConfig(
     level=logging.INFO,
@@ -61,21 +66,21 @@ def _num(value, cast=float):
         if value is None:
             return None
         f = float(value)
-        if f != f:  # NaN
+        if not math.isfinite(f):
             return None
         return cast(f)
     except (TypeError, ValueError):
         return None
 
 
-def fetch_history(stock: Stock, period: str, interval: str, retries: int = 3, start: str | None = None):
+def fetch_history(stock: Stock, period: str, interval: str, retries: int = 3, start: str | None = None, actions_dir=None):
     """Returns a list of daily-bar dicts for one symbol (possibly empty). `start`
     (YYYY-MM-DD) takes precedence over `period`."""
     window = {"start": start} if start else {"period": period}
     for attempt in range(1, retries + 1):
         try:
             frame = yf.Ticker(stock.yf_symbol).history(
-                interval=interval, auto_adjust=True, **window
+                interval=interval, auto_adjust=True, actions=True, repair=True, **window
             )
             if frame is None or frame.empty:
                 logger.warning("No history for %s (%s).", stock.yf_symbol, window)
@@ -95,6 +100,25 @@ def fetch_history(stock: Stock, period: str, interval: str, retries: int = 3, st
                         "volume": _num(row.get("Volume"), cast=int),
                     }
                 )
+            if actions_dir is not None:
+                path = Path(actions_dir) / (stock.yf_symbol.replace("/", "_") + ".json")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                previous = json.loads(path.read_text()) if path.exists() else {"events": []}
+                events = {(e["date"], e["kind"]): e for e in previous["events"]}
+                for idx, row in frame.iterrows():
+                    for column, kind in [("Stock Splits", "split"), ("Dividends", "dividend")]:
+                        value = _num(row.get(column))
+                        if value:
+                            event = {"date": idx.date().isoformat(), "kind": kind, "value": value,
+                                     "source": "yfinance.history", "provider_adjusted": True}
+                            events[(event["date"], kind)] = event
+                payload = {"symbol": stock.yf_symbol, "checked_at": datetime.now(timezone.utc).isoformat(),
+                           "price_basis": "provider_adjusted", "repair_requested": True,
+                           "events": list(events.values()), "fetched_start": records[0]["trade_date"],
+                           "fetched_end": records[-1]["trade_date"]}
+                temporary = path.with_suffix(".tmp")
+                temporary.write_text(json.dumps(payload, allow_nan=False, indent=2))
+                temporary.replace(path)
             return records
         except Exception as e:  # noqa: BLE001 — one bad symbol must not abort the backfill
             if attempt == retries:
@@ -122,6 +146,10 @@ def main():
         help="Fetch bars from this date (YYYY-MM-DD) instead of --period",
     )
     parser.add_argument("--interval", default="1d", help="yfinance interval (default: 1d)")
+    parser.add_argument("--watermarks", help="JSON symbol -> latest committed daily date")
+    parser.add_argument("--overlap-days", type=int, default=5)
+    parser.add_argument("--references", help="Stored overlap closes and earliest dates, exported from Iceberg")
+    parser.add_argument("--actions-dir", default=str(Path(__file__).resolve().parents[1] / "ml/evaluation/results/market_data/actions"))
     parser.add_argument("--batch-size", type=int, default=50, help="Symbols per Kafka flush")
     parser.add_argument("--delay", type=float, default=0.5, help="Seconds between symbols")
     parser.add_argument("--bootstrap-servers", default="localhost:9092")
@@ -141,6 +169,17 @@ def main():
         help="Backfill only the benchmark index symbols (skip the NIFTY 500 universe)",
     )
     args = parser.parse_args()
+    if args.overlap_days < 0:
+        parser.error("--overlap-days must be non-negative")
+    if args.watermarks and args.start:
+        parser.error("--watermarks and --start are mutually exclusive")
+    watermarks = None
+    references = json.loads(Path(args.references).read_text()) if args.references else {}
+    if args.watermarks:
+        with open(args.watermarks) as fh:
+            watermarks = json.load(fh)
+        if not isinstance(watermarks, dict):
+            parser.error("watermarks must be a JSON object")
 
     if args.index_only:
         universe = list(INDEX_SYMBOLS)
@@ -170,7 +209,17 @@ def main():
     started = time.time()
 
     for i, stock in enumerate(universe, start=1):
-        records = fetch_history(stock, args.period, args.interval, start=args.start)
+        start = (history_start(stock.yf_symbol, watermarks, args.overlap_days)
+                 if watermarks is not None else args.start)
+        logger.info("Fetching %s: %s", stock.yf_symbol,
+                    f"since {start}" if start else f"bootstrap {args.period}")
+        records = fetch_history(stock, args.period, args.interval, start=start, actions_dir=args.actions_dir)
+        reference = references.get(stock.yf_symbol, {})
+        if start and adjustment_revision(records, reference):
+            logger.warning("%s: historical adjustment changed; refreshing from %s", stock.yf_symbol, reference["earliest"])
+            records = fetch_history(stock, args.period, args.interval, start=reference["earliest"], actions_dir=args.actions_dir)
+            if not records or min(r["trade_date"] for r in records) > reference["earliest"]:
+                raise RuntimeError(f"Cannot reconcile {stock.yf_symbol} history; refusing to mix adjusted price bases")
         if records:
             pending.extend(records)
             succeeded += 1

@@ -25,6 +25,12 @@ fail() { echo -e "\033[1;31m[ fail ]\033[0m $*"; }
 # spark_submit <packages> <script> [args...]
 spark_submit() {
   local packages="$1"; shift
+  local driver_network=()
+  # Local workers share the host. Avoid advertising a transient Wi-Fi address
+  # for large block-manager transfers during long research runs.
+  case "$SPARK_MASTER" in
+    local*) driver_network=(--conf spark.driver.host=127.0.0.1 --conf spark.driver.bindAddress=127.0.0.1) ;;
+  esac
   "$SPARK_HOME/bin/spark-submit" \
     --master "$SPARK_MASTER" \
     --driver-memory "$SPARK_DRIVER_MEMORY" \
@@ -32,6 +38,7 @@ spark_submit() {
     --conf spark.sql.iceberg.check-nullability=false \
     --conf spark.pyspark.python="$PYSPARK_PYTHON" \
     --conf spark.pyspark.driver.python="$PYSPARK_PYTHON" \
+    "${driver_network[@]}" \
     --packages "$packages" \
     "$@"
 }
