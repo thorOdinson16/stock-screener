@@ -10,6 +10,12 @@ type MetricColumn = {
   value?: (m: ModelMetric) => unknown;
 };
 
+type RetailResearch = {
+  status: string; selected_on_validation: string | null; production_changed: boolean;
+  results: Record<string, Record<string, { status: string; net_return: number | null; max_drawdown: number | null; closed_trades: number; blocked: { reason: string; date: string; symbol: string } | null }>>;
+  limitations: string[];
+};
+
 const METRICS: MetricColumn[] = [
   { key: "ic_mean", label: "IC mean" },
   { key: "ic_t_stat", label: "IC t" },
@@ -23,6 +29,9 @@ const METRICS: MetricColumn[] = [
 
 export default function Model() {
   const comparison = useApi<ComparisonResponse>(["model"], "/model/comparison");
+  const retail = useApi<RetailResearch>(["retail-research"], "/research/experiments");
+  const quality = useApi<{ model_uses_current_quality_policy: boolean }>(["research-quality"], "/research/quality");
+  const percent = (v: number | null) => v === null ? "—" : `${(v * 100).toFixed(2)}%`;
 
   return (
     <>
@@ -36,6 +45,18 @@ export default function Model() {
         <Updated at={comparison.dataUpdatedAt} />
       </div>
 
+      {quality.data && !quality.data.model_uses_current_quality_policy && <Card title="Historical model needs a quality refresh">
+        <p className="muted">The current model and its historical evaluation predate corporate-action-aware indicators and label checks. Refresh prices, then use Retrain model to rebuild them. The results below retain their original evaluation date.</p>
+      </Card>}
+      <div style={{ margin: "16px 0" }}><Card title="Retail portfolio experiments" subtitle="Earlier folds select a candidate; later folds assess it. Temporary models do not replace production.">
+        <QueryView query={retail}>{r => r.status === "not_available" ? <p className="muted">No completed retail research report yet.</p> : <>
+          <p className="muted">Status: {r.status} · Validation choice: {r.selected_on_validation ?? "none qualified"} · Production changed: {r.production_changed ? "yes" : "no"}</p>
+          <div className="table-wrap"><table><thead><tr><th>Variant</th><th>Period</th><th>Status</th><th>Net return</th><th>Daily drawdown</th><th>Closed trades</th></tr></thead><tbody>
+            {Object.entries(r.results).flatMap(([name, periods]) => Object.entries(periods).map(([period, result]) => <tr key={`${name}-${period}`}><td>{name}</td><td>{period}</td><td>{result.status}{result.blocked && <div className="tag">{result.blocked.date} · {result.blocked.symbol}: {result.blocked.reason}</div>}</td><td>{percent(result.net_return)}</td><td>{percent(result.max_drawdown)}</td><td>{result.closed_trades}</td></tr>))}
+          </tbody></table></div>
+          <details style={{ marginTop: 12 }}><summary>Method limits</summary>{r.limitations.map(v => <p key={v} className="muted">{v}</p>)}</details>
+        </>}</QueryView>
+      </Card></div>
       <QueryView query={comparison}>
         {(d) => (
           <div className="grid" style={{ gap: 16 }}>
