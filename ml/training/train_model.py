@@ -121,7 +121,7 @@ def prepare(dataset, target: str):
         inputCols=MODEL_FEATURES, outputCol="features", handleInvalid="skip"
     )
     return assembler.transform(
-        dataset.select(*MODEL_FEATURES, F.col(target).alias("label"), "split")
+        dataset.filter(F.col(target).isNotNull()).select(*MODEL_FEATURES, F.col(target).alias("label"), "split")
     )
 
 
@@ -186,6 +186,12 @@ def main():
     spark.sparkContext.setLogLevel("WARN")
 
     dataset = spark.table("iceberg.ml.training_dataset").cache()
+    sys.path.insert(0, os.path.join(_REPO_ROOT, "ml", "evaluation"))
+    from corporate_actions import load_events, fingerprint
+    quality_digest = fingerprint(load_events())
+    recorded = spark.sql("SHOW TBLPROPERTIES iceberg.ml.training_dataset ('quality.policy.digest')").first()
+    if recorded is None or recorded["value"] != quality_digest:
+        raise RuntimeError("Training data has not been rebuilt with the current corporate-action policy; run scripts/retrain.sh")
 
     test_start = dataset.filter(F.col("split") == "test").agg(F.min("trade_date")).first()[0]
     embargo_start = dataset.filter(F.col("split") == "embargo").agg(F.min("trade_date")).first()[0]
@@ -199,22 +205,23 @@ def main():
         "test_start": str(test_start),
         "embargo_start": str(embargo_start),
         "features": MODEL_FEATURES,
+        "quality_policy_digest": quality_digest,
         "labels": {},
     }
 
     for label in LABEL_COLUMNS:
         rank_col = f"{label}_rank"
         # Learning-to-rank approximation: within-date percentile rank in [-0.5, 0.5].
-        dataset = dataset.withColumn(
+        label_dataset = dataset.filter(F.col(label).isNotNull()).withColumn(
             rank_col,
             F.percent_rank().over(Window.partitionBy("trade_date").orderBy(label)) - 0.5,
         )
-        fit_dates, val_dates = time_validation_split(dataset)
+        fit_dates, val_dates = time_validation_split(label_dataset)
 
         registry["labels"][label] = {}
         for algo in ALGOS + RANK_ALGOS:
             target = rank_col if is_rank(algo) else label
-            train_df = prepare(dataset, target).filter(
+            train_df = prepare(label_dataset, target).filter(
                 F.col("split") == "train"
             ).repartition(TRAIN_PARTITIONS).cache()
             train_rows = train_df.count()

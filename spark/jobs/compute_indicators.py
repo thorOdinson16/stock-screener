@@ -31,6 +31,9 @@ from pyspark.sql.types import (
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from indicators import compute_features  # noqa: E402
 from nullability import match_not_null  # noqa: E402
+_EVALUATION = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "ml", "evaluation")
+sys.path.insert(0, _EVALUATION)
+from corporate_actions import load_events, reset_features, fingerprint
 
 FEATURE_SCHEMA = StructType(
     [
@@ -86,6 +89,7 @@ def build_spark(warehouse: str) -> SparkSession:
     spark.sparkContext.addPyFile(
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "indicators.py")
     )
+    spark.sparkContext.addPyFile(os.path.join(_EVALUATION, "corporate_actions.py"))
     return spark
 
 
@@ -107,9 +111,13 @@ def compute_quotes_enriched(spark: SparkSession) -> int:
         )
     )
 
+    events = load_events()
+    def compute_safe(group):
+        return reset_features(group, events, compute_features)
+
     features = (
         daily.groupBy("symbol")
-        .applyInPandas(compute_features, schema=FEATURE_SCHEMA)
+        .applyInPandas(compute_safe, schema=FEATURE_SCHEMA)
         .withColumn("computed_at", F.current_timestamp())
         .select(*ENRICHED_COLUMNS)
     )
@@ -122,6 +130,8 @@ def compute_quotes_enriched(spark: SparkSession) -> int:
         SELECT * FROM quotes_enriched_stage
         """
     )
+    digest = fingerprint(events)
+    spark.sql(f"ALTER TABLE iceberg.silver.quotes_enriched SET TBLPROPERTIES ('quality.policy.digest'='{digest}')")
 
     return spark.table("iceberg.silver.quotes_enriched").count()
 
