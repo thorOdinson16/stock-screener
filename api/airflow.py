@@ -114,7 +114,7 @@ def get_dag_run(dag_id: str, run_id: str) -> dict:
 
 
 def list_dag_runs(dag_id: str, limit: int = 10) -> list[dict]:
-    data = _request("GET", f"/dags/{dag_id}/dagRuns?limit={limit}")
+    data = _request("GET", f"/dags/{dag_id}/dagRuns?limit={limit}&order_by=-logical_date")
     return data.get("dag_runs", [])
 
 
