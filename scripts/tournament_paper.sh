@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # A separate paper path: never publishes the experimental model to Druid/Kafka.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# Existing cohorts mature independently of reference scoring or new exports.
+if ! bash "$REPO_ROOT/scripts/paper_outcomes.sh"; then
+  log "Frozen paper outcome refresh failed; inspect observation logs."
+fi
 tournament="${TOURNAMENT_DIR:-$REPO_ROOT/ml/evaluation/results/model_tournament_20261108}"
 paper_stage="initializing"
 record_paper_failure() {

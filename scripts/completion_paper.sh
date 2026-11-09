@@ -36,3 +36,11 @@ spark_submit "$ICEBERG_PKG" "$REPO_ROOT/spark/jobs/paper_current_reference.py" -
 stage="paired_capture_and_evaluation"
 "$REPO_ROOT/ml/.venv/bin/python" "$REPO_ROOT/ml/evaluation/completion_forward.py" \
   --input "$input" --reference "$reference" --research "$research"
+
+# Independent information trial reuses this exact fresh price export/reference.
+# Its optional research stage cannot fail the production publication step.
+if [ -f "${INFORMATION_RESEARCH:-$REPO_ROOT/ml/evaluation/results/information_research_20261109}/report.json" ]; then
+  if ! bash "$REPO_ROOT/scripts/information_paper.sh" "$input" "$reference"; then
+    log "Information paper capture failed; inspect its research logs. Existing production and paper results remain available."
+  fi
+fi
