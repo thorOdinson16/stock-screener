@@ -5,6 +5,9 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+log "Refreshing corporate-action-aware indicators from stored bars"
+FULL_RUN=1 "$SCRIPTS_DIR/indicators.sh"
+
 log "Building training dataset"
 spark_submit "$ICEBERG_PKG" "$REPO_ROOT/spark/jobs/build_training.py" --warehouse "$WAREHOUSE"
 

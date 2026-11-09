@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # poll.sh — one poll cycle. Every run fetches quotes and the daily bars added
-# since the last scored date; full runs also fetch fundamentals + annual
+# since each symbol’s latest ingested date; full runs also fetch fundamentals + annual
 # financial statements.
 #
 # Env: FULL_RUN=1 (quotes+fundamentals) | UNIVERSE_LIMIT=N
@@ -25,25 +25,19 @@ fi
 
 run_poller "${args[@]}"
 
-# Daily bars drive the indicators and scores, so bring the history up to date:
-# re-fetch from a few days before the latest scored date (picking up the final
-# close of any partial bar). Without a scored date yet, fetch a year.
-latest=$(druid_sql "SELECT trade_date FROM screener GROUP BY trade_date ORDER BY trade_date DESC LIMIT 1" 2>/dev/null \
-  | python3 -c 'import sys,json
-try:
-    print(json.load(sys.stdin)[0]["trade_date"][:10])
-except Exception:
-    print("")' 2>/dev/null || true)
-bar_args=(--once --include-index --delay 0.1 --bootstrap-servers "$KAFKA_BOOTSTRAP")
+# Derive progress from committed Iceberg data, independently for each symbol.
+# A failed export aborts the run rather than silently downloading all history.
+watermarks=$(mktemp "${TMPDIR:-/tmp}/daily-watermarks.XXXXXX")
+references="$watermarks.references"
+trap 'rm -f "$watermarks" "$watermarks.tmp" "$references" "$references.tmp"' EXIT
+spark_submit "$ICEBERG_PKG" "$REPO_ROOT/spark/jobs/daily_history.py" watermarks \
+  --warehouse "$WAREHOUSE" --output "$watermarks" --reference-output "$references"
+bar_args=(--once --include-index --delay 0.1 --bootstrap-servers "$KAFKA_BOOTSTRAP"
+  --watermarks "$watermarks" --overlap-days "$DAILY_BARS_LOOKBACK_DAYS"
+  --references "$references"
+  --period "$DAILY_BARS_BOOTSTRAP_PERIOD")
 [ -n "$limit" ] && bar_args+=(--universe-limit "$limit")
-if [ -n "$latest" ]; then
-  start=$(date -d "$latest - ${DAILY_BARS_LOOKBACK_DAYS:-10} days" +%F)
-  log "Fetching daily bars since $start (latest scored date: $latest)"
-  bar_args+=(--start "$start")
-else
-  log "No scored date in Druid yet — fetching a year of daily bars"
-  bar_args+=(--period 1y)
-fi
+log "Fetching missing daily bars per symbol (overlap: $DAILY_BARS_LOOKBACK_DAYS days)"
 ( cd "$REPO_ROOT/poller" && "$POLLER_PYTHON" backfill.py "${bar_args[@]}" )
 
 if [ "${FULL_RUN:-0}" = "1" ]; then

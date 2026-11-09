@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "events": [
+    {
+      "id": "vedanta-demerger-2026",
+      "symbols": [
+        "VEDL.NS"
+      ],
+      "kind": "demerger",
+      "impact_start": "2026-04-30",
+      "impact_end": "2026-05-01",
+      "known_at": "2026-04-22",
+      "status": "unresolved",
+      "source": "https://nsearchives.nseindia.com/content/circulars/FAOP73857.pdf",
+      "note": "One share in each of four resulting companies per original share is verified. Parent is retained. Raw prices and entitlement valuations are still required; pre-listing shares are not valued at later listing prices.",
+      "terms_verified": true,
+      "terms_source": "https://www.vedantalimited.com/uploads/shareholder-information/scheme-arrangement/VEDLSEIntimationRecordDate20April2026signed.pdf",
+      "ex_date": "2026-04-30",
+      "record_date": "2026-05-01",
+      "valuation_status": "unadjusted_quotes_required",
+      "parent_asset_id": "vedanta-parent",
+      "retains_parent": true,
+      "entitlements": [
+        {
+          "asset_id": "vedanta-aluminium",
+          "name": "Vedanta Aluminium Metal Limited",
+          "ratio": 1,
+          "listing_date": "2026-06-15",
+          "listing_source": "https://links.sgx.com/FileOpen/Vedanta%20Resources%20Finance%20II%20plc_US%24%20Guaranteed%20Senior%20Bonds%20-%20Offering%20Circular%20dtd%2025%20June%202026%20%28Part%201%20of%203%29.ashx?App=Prospectus&FileID=70482"
+        },
+        {
+          "asset_id": "vedanta-power",
+          "name": "Vedanta Power Limited (formerly Talwandi Sabo Power Limited)",
+          "ratio": 1,
+          "listing_date": "2026-06-15",
+          "listing_source": "https://links.sgx.com/FileOpen/Vedanta%20Resources%20Finance%20II%20plc_US%24%20Guaranteed%20Senior%20Bonds%20-%20Offering%20Circular%20dtd%2025%20June%202026%20%28Part%201%20of%203%29.ashx?App=Prospectus&FileID=70482"
+        },
+        {
+          "asset_id": "vedanta-oil-gas",
+          "name": "Vedanta Oil and Gas Limited (formerly MALCO Energy Limited)",
+          "ratio": 1,
+          "listing_date": "2026-06-15",
+          "listing_source": "https://links.sgx.com/FileOpen/Vedanta%20Resources%20Finance%20II%20plc_US%24%20Guaranteed%20Senior%20Bonds%20-%20Offering%20Circular%20dtd%2025%20June%202026%20%28Part%201%20of%203%29.ashx?App=Prospectus&FileID=70482"
+        },
+        {
+          "asset_id": "vedanta-iron-steel",
+          "name": "Vedanta Iron and Steel Limited",
+          "ratio": 1,
+          "listing_date": "2026-06-15",
+          "listing_source": "https://links.sgx.com/FileOpen/Vedanta%20Resources%20Finance%20II%20plc_US%24%20Guaranteed%20Senior%20Bonds%20-%20Offering%20Circular%20dtd%2025%20June%202026%20%28Part%201%20of%203%29.ashx?App=Prospectus&FileID=70482"
+        }
+      ]
+    },
+    {
+      "id": "heg-demerger-2026",
+      "symbols": [
+        "HEG.NS",
+        "HEGAM.NS"
+      ],
+      "kind": "demerger",
+      "impact_start": "2026-09-01",
+      "impact_end": "2026-09-22",
+      "known_at": "2026-08-26",
+      "status": "unresolved",
+      "source": "https://www.hegadvancedmaterials.com/media/press-releases/heg-demerger-to-take-effect-from-september-1-2026-record-date-fixed-for-september-7",
+      "note": "The 1:1 graphite entitlement is verified. The child listing date and exit values are not verified. Parent ticker reuse must not identify the child from pre-demerger HEG history.",
+      "terms_verified": true,
+      "terms_source": "https://www.hegadvancedmaterials.com/cms/wp-content/uploads/2026/09/FINAL-Press-Release_August-25_2026.pdf",
+      "ex_date": "2026-09-07",
+      "record_date": "2026-09-07",
+      "ex_date_source": "https://www.solactive.com/announcements/69232",
+      "valuation_status": "listing_and_unadjusted_quotes_required",
+      "parent_asset_id": "heg-advanced-materials-parent",
+      "retains_parent": true,
+      "entitlements": [
+        {
+          "asset_id": "heg-graphite-resulting-company",
+          "name": "HEG Graphite Limited (resulting company; proposed HEG Limited)",
+          "ratio": 1,
+          "listing_date": null,
+          "listing_source": null
+        }
+      ],
+      "symbol_transition": {
+        "old_symbol": "HEG.NS",
+        "new_symbol": "HEGAM.NS",
+        "effective_date": "2026-09-22",
+        "source": "https://nsearchives.nseindia.com/content/circulars/CML76359.pdf"
+      },
+      "announcement_date": "2026-08-25",
+      "knowledge_convention": "First full day after dated issuer release; intraday publication time is not verified."
+    }
+  ]
+}

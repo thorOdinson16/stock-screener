@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useApi } from "../hooks";
 import type { PicksResponse } from "../types";
 import { changeClass, fmtNum, fmtPct } from "../format";
@@ -19,6 +19,7 @@ export default function TopPicks() {
           <h1 className="page-title">Top Picks</h1>
           <p className="page-sub">
             Ranked by the ML score for the selected forward-return horizon
+            {" · "}<Link className="link" to="/trade-plan">Build a capital and risk plan</Link>
           </p>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>

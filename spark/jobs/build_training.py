@@ -26,7 +26,7 @@ import json
 import os
 import sys
 
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
     DateType,
@@ -54,6 +54,8 @@ from spark_schema import FEATURE_MODULES, NORMALIZED_SCHEMA, attach_fundamentals
 sys.path.insert(0, _HERE)
 from nullability import match_not_null  # noqa: E402
 from transform import MODEL_FEATURES, transform_group  # noqa: E402
+sys.path.insert(0, os.path.join(_REPO_ROOT, "ml", "evaluation"))
+from corporate_actions import load_events, mask_labels, fingerprint
 
 UNIVERSE_CACHE = os.path.join(_REPO_ROOT, "poller", "universe", "universe_cache.json")
 
@@ -114,6 +116,7 @@ def build_spark(warehouse: str) -> SparkSession:
     )
     for module in FEATURE_MODULES:
         spark.sparkContext.addPyFile(os.path.join(_FEATURES_DIR, module))
+    spark.sparkContext.addPyFile(os.path.join(_REPO_ROOT, "ml", "evaluation", "corporate_actions.py"))
     return spark
 
 
@@ -144,8 +147,12 @@ def universe_metadata(spark: SparkSession):
     return spark.createDataFrame(rows, ["symbol", "industry"])
 
 
-def build_dataset(spark: SparkSession):
-    silver = spark.table("iceberg.silver.quotes_enriched")
+def build_dataset(spark: SparkSession, silver_frame=None):
+    silver = spark.table("iceberg.silver.quotes_enriched") if silver_frame is None else silver_frame
+    if silver_frame is None:
+        recorded = spark.sql("SHOW TBLPROPERTIES iceberg.silver.quotes_enriched ('quality.policy.digest')").first()
+        if recorded is None or recorded["value"] != fingerprint(load_events()):
+            raise RuntimeError("Indicators predate the corporate-action policy; run scripts/indicators.sh first")
     base = (
         silver.select(
             "symbol",
@@ -157,9 +164,22 @@ def build_dataset(spark: SparkSession):
         .dropna(subset=["close"])
     )
 
+    events = load_events()
+    def safe_labels(group):
+        return mask_labels(group, events, HORIZONS, compute_labels)
+
     labeled = base.groupBy("symbol").applyInPandas(
-        compute_labels, schema=StructType(DATASET_FIELDS)
+        safe_labels, schema=StructType(DATASET_FIELDS)
     )
+    calendar = base.filter(F.col("symbol") == BENCHMARK_SYMBOLS[0]).select("trade_date").distinct()
+    for horizon in HORIZONS:
+        calendar = calendar.withColumn(f"_calendar_{horizon}", F.lead("trade_date", horizon).over(Window.orderBy("trade_date")))
+        labeled = labeled.withColumn(f"_actual_{horizon}", F.lead("trade_date", horizon).over(Window.partitionBy("symbol").orderBy("trade_date")))
+    labeled = labeled.join(calendar, "trade_date", "left")
+    for horizon in HORIZONS:
+        labeled = labeled.withColumn(f"fwd_ret_{horizon}d", F.when(
+            F.col(f"_actual_{horizon}") == F.col(f"_calendar_{horizon}"), F.col(f"fwd_ret_{horizon}d")))
+    labeled = labeled.select(*[field.name for field in DATASET_FIELDS])
     labeled.cache()
 
     dates = [
@@ -181,7 +201,8 @@ def build_dataset(spark: SparkSession):
     index = labeled.filter(is_benchmark)
 
     universe_bench = universe.groupBy("trade_date").agg(
-        *[F.avg(c).alias(f"universe_ret_{h}d") for h, c in zip(HORIZONS, RAW_LABEL_COLUMNS)]
+        *[F.when(F.count(c) == F.count(F.lit(1)), F.avg(c)).alias(f"universe_ret_{h}d")
+          for h, c in zip(HORIZONS, RAW_LABEL_COLUMNS)]
     )
     index_bench = index.groupBy("trade_date").agg(
         *[F.first(c).alias(f"index_ret_{h}d") for h, c in zip(HORIZONS, RAW_LABEL_COLUMNS)]
@@ -224,6 +245,8 @@ def main():
     spark.sql(
         "INSERT OVERWRITE iceberg.ml.training_dataset SELECT * FROM training_stage"
     )
+    policy_digest = fingerprint(load_events())
+    spark.sql(f"ALTER TABLE iceberg.ml.training_dataset SET TBLPROPERTIES ('quality.policy.digest'='{policy_digest}')")
 
     total = spark.table("iceberg.ml.training_dataset").count()
     splits = {

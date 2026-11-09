@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "created_at": "2026-11-09T11:19:34.676193+05:30",
+  "selection_date": "2023-06-30",
+  "selection": "Top median close*volume over 63 completed benchmark sessions, max3 per industry; exclude Financial Services and Unknown; no return outcomes used",
+  "selection_limits": "Current universe/industry membership and provider-adjusted historical prices; survivorship and hindsight membership remain",
+  "source_manifest_sha256": "79b15bd3bdbde145a8160f4f8a7791a6a32ccbdda6fa81ed15db0f80f1331db0",
+  "bars_sha256": "f5ac896cea2b1e14fadaab0cff335051fbad125d678e29dc2b16c6fd3835ef07",
+  "universe_sha256": "671ec3c94cc33d75998718c64c3bc3a780d93dc1fa9236521988b62a98af4962",
+  "symbols": [
+    {
+      "symbol": "RELIANCE.NS",
+      "industry": "Oil Gas & Consumable Fuels",
+      "isin": "INE002A01018",
+      "selection_median_turnover": 11641553051.93
+    },
+    {
+      "symbol": "ADANIENT.NS",
+      "industry": "Metals & Mining",
+      "isin": "INE423A01024",
+      "selection_median_turnover": 7664242766.429999
+    },
+    {
+      "symbol": "INFY.NS",
+      "industry": "Information Technology",
+      "isin": "INE009A01021",
+      "selection_median_turnover": 7309215166.348389
+    },
+    {
+      "symbol": "TMPV.NS",
+      "industry": "Automobile and Auto Components",
+      "isin": "INE155A01022",
+      "selection_median_turnover": 5708912648.400001
+    },
+    {
+      "symbol": "TCS.NS",
+      "industry": "Information Technology",
+      "isin": "INE467B01029",
+      "selection_median_turnover": 5020625397.94
+    },
+    {
+      "symbol": "LT.NS",
+      "industry": "Construction",
+      "isin": "INE018A01030",
+      "selection_median_turnover": 4051055130.5000005
+    },
+    {
+      "symbol": "ETERNAL.NS",
+      "industry": "Consumer Services",
+      "isin": "INE758T01015",
+      "selection_median_turnover": 3930641203.9500003
+    },
+    {
+      "symbol": "MARUTI.NS",
+      "industry": "Automobile and Auto Components",
+      "isin": "INE585B01010",
+      "selection_median_turnover": 3489442082.8900003
+    },
+    {
+      "symbol": "ADANIPORTS.NS",
+      "industry": "Services",
+      "isin": "INE742F01042",
+      "selection_median_turnover": 3443334522.51
+    },
+    {
+      "symbol": "ITC.NS",
+      "industry": "Fast Moving Consumer Goods",
+      "isin": "INE154A01025",
+      "selection_median_turnover": 3396159673.62
+    },
+    {
+      "symbol": "BHARTIARTL.NS",
+      "industry": "Telecommunication",
+      "isin": "INE397D01024",
+      "selection_median_turnover": 3364680978.89
+    },
+    {
+      "symbol": "HAL.NS",
+      "industry": "Capital Goods",
+      "isin": "INE066F01020",
+      "selection_median_turnover": 3228790612.8
+    },
+    {
+      "symbol": "HINDUNILVR.NS",
+      "industry": "Fast Moving Consumer Goods",
+      "isin": "INE030A01027",
+      "selection_median_turnover": 3038672164.0
+    },
+    {
+      "symbol": "TATASTEEL.NS",
+      "industry": "Metals & Mining",
+      "isin": "INE081A01020",
+      "selection_median_turnover": 2784078052.75
+    },
+    {
+      "symbol": "M&M.NS",
+      "industry": "Automobile and Auto Components",
+      "isin": "INE101A01026",
+      "selection_median_turnover": 2538761948.2999997
+    },
+    {
+      "symbol": "ASIANPAINT.NS",
+      "industry": "Consumer Durables",
+      "isin": "INE021A01026",
+      "selection_median_turnover": 2383409977.52
+    },
+    {
+      "symbol": "SUNPHARMA.NS",
+      "industry": "Healthcare",
+      "isin": "INE044A01036",
+      "selection_median_turnover": 2136483665.68
+    },
+    {
+      "symbol": "TITAN.NS",
+      "industry": "Consumer Durables",
+      "isin": "INE280A01028",
+      "selection_median_turnover": 2106682309.76
+    },
+    {
+      "symbol": "HINDALCO.NS",
+      "industry": "Metals & Mining",
+      "isin": "INE038A01020",
+      "selection_median_turnover": 2062962483.94
+    },
+    {
+      "symbol": "DLF.NS",
+      "industry": "Realty",
+      "isin": "INE271C01023",
+      "selection_median_turnover": 2013794952.72
+    }
+  ],
+  "history_start": "2022-01-01",
+  "audit_start": "2024-01-01",
+  "audit_end": "2026-10-26",
+  "required_quarters_start": "2022Q1",
+  "required_quarters_end": "2026Q2",
+  "thresholds": {
+    "minimum_signal_dates": 504,
+    "margin_fraction": 0.95,
+    "qoq_fraction": 0.95,
+    "yoy_fraction": 0.9,
+    "required_date_pass_fraction": 0.95,
+    "minimum_quarter_pass_fraction": 0.9,
+    "required_quarter_cell_fraction": 0.95,
+    "latest_date_must_pass": true
+  },
+  "availability": "Verified publication+next calendar day; require a prior quarter and year public by each signal date; maximum filing age180 days",
+  "readiness_scope": "Data coverage only; not permission to train, evidence of alpha, production promotion or removal of corporate-action limitations"
+}

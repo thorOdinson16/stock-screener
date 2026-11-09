@@ -1,0 +1,8 @@
+# Isolated CPU research environment; never installed into Spark/API/poller.
+numpy==1.26.4
+pandas==2.2.3
+pyarrow==19.0.1
+scipy==1.15.3
+scikit-learn==1.7.2
+lightgbm==4.6.0
+catboost==1.2.8

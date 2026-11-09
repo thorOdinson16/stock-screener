@@ -10,6 +10,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 run_seatunnel quotes-job.conf
 run_seatunnel quotes-daily-job.conf
 
+# Replace overlapping daily bars and clean up duplicates from older runs.
+spark_submit "$ICEBERG_PKG" "$REPO_ROOT/spark/jobs/daily_history.py" deduplicate \
+  --warehouse "$WAREHOUSE"
+
 if [ "${FULL_RUN:-0}" = "1" ]; then
   run_seatunnel fundamentals-job.conf
   run_seatunnel financials-job.conf

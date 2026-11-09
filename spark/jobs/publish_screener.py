@@ -15,6 +15,7 @@ Run (from the repo root):
 """
 
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 import sys
@@ -103,12 +104,15 @@ def latest_change_percent(spark: SparkSession):
 
 def latest_score(spark: SparkSession, label: str, score_alias: str, rank_alias: str):
     scores = spark.table("iceberg.gold.stock_scores").filter(F.col("label") == label)
+    latest_date = scores.agg(F.max("trade_date")).first()[0]
+    scores = scores.filter(F.col("trade_date") == F.lit(latest_date))
     window = Window.partitionBy("symbol").orderBy(F.col("scored_at").desc())
     return (
         scores.withColumn("rn", F.row_number().over(window))
         .filter(F.col("rn") == 1)
         .select(
             "symbol",
+            F.col("trade_date").cast("string").alias("trade_date"),
             F.col("score").cast("double").alias(score_alias),
             F.col("rank").cast("long").alias(rank_alias),
         )
@@ -152,22 +156,31 @@ def main():
     spark = build_spark(args.warehouse)
     spark.sparkContext.setLogLevel("WARN")
 
+    published_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     snapshot = (
         latest_indicators(spark)
         .join(latest_change_percent(spark), "symbol", "left")
         .join(latest_fundamentals(spark), "symbol", "left")
-        .join(latest_score(spark, "excess_ret_5d", "score_5d", "rank_5d"), "symbol", "left")
-        .join(latest_score(spark, "excess_ret_21d", "score_21d", "rank_21d"), "symbol", "left")
+        .join(latest_score(spark, "excess_ret_5d", "score_5d", "rank_5d"), ["symbol", "trade_date"], "left")
+        .join(latest_score(spark, "excess_ret_21d", "score_21d", "rank_21d"), ["symbol", "trade_date"], "left")
         .join(F.broadcast(universe_metadata(spark)), "symbol", "left")
         .withColumn(
             "snapshot_at",
-            F.date_format(F.current_timestamp(), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"),
+            F.lit(published_at),
         )
         .select(*PAYLOAD_COLUMNS)
+        .cache()
     )
 
     rows = snapshot.count()
+    with open(os.path.join(_REPO_ROOT, "ml", "models", "selected.json")) as fh:
+        tracking_model = json.load(fh)
     publish(snapshot, args.bootstrap_servers)
+    sys.path.insert(0, os.path.join(_REPO_ROOT, "ml", "evaluation"))
+    from forward_tracking import DEFAULT_DIR, atomic_json
+    atomic_json(DEFAULT_DIR / "expected.json", {
+        "published_at": published_at, "count": rows, "model": tracking_model,
+    })
     print(f"Published {rows} rows to {SCREENER_TOPIC}.")
 
     spark.stop()

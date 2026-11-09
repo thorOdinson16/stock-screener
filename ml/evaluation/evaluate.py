@@ -139,6 +139,7 @@ def sector_neutral_ic(pdf, score_col, label_col, lags):
 
 def evaluate_scores(pdf, score_col, label_col, raw_col, universe_col, index_col,
                     k, horizon, cost_bps, n_trials=1):
+    pdf = pdf.dropna(subset=[score_col, label_col, raw_col, universe_col, index_col])
     ic = information_coefficient(pdf, score_col, label_col, lags=horizon - 1)
     neutral = sector_neutral_ic(pdf, score_col, label_col, lags=horizon - 1)
     top = top_k_forward_returns(pdf, score_col, raw_col, k=k)
@@ -292,7 +293,7 @@ def fold_metrics(dataset, label, members, k, cost_bps, mode="walk_forward", n_tr
             assembler = VectorAssembler(
                 inputCols=MODEL_FEATURES, outputCol="features", handleInvalid="skip"
             )
-            train = dataset.filter(F.col("trade_date").isin(train_dates))
+            train = dataset.filter(F.col("trade_date").isin(train_dates)).filter(F.col(label).isNotNull())
             test = dataset.filter(F.col("trade_date").isin(test_dates))
             if any(m.get("kind") == "rank" for m in members):
                 window = Window.partitionBy("trade_date").orderBy(label)
@@ -348,6 +349,7 @@ def fold_metrics(dataset, label, members, k, cost_bps, mode="walk_forward", n_tr
             return {"mode": mode, "n_periods": 0}
 
         wf = pd.concat(frames, ignore_index=True)
+        wf = wf.dropna(subset=["score", label, raw, universe_col, index_col])
         ic = information_coefficient(wf, "score", label, lags=horizon - 1)
         bt = backtest(
             wf, horizon, k=k, cost_bps=cost_bps, long_short=True,
@@ -421,6 +423,8 @@ def main():
         "n_trials": n_trials, "labels": {},
     }
     selected = {"selected_at": now, "labels": {}}
+    results["quality_policy_digest"] = registry.get("quality_policy_digest")
+    selected["quality_policy_digest"] = registry.get("quality_policy_digest")
     robustness = {}
     hf_symbols = full_history_symbols(dataset, args.coverage_threshold)
     print(f"full-history symbols (>= {args.coverage_threshold:.0%} of dates): {len(hf_symbols)}")
