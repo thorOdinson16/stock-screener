@@ -272,3 +272,10 @@ pipeline runs, or independently with `bash scripts/paper_outcomes.sh`. [Pilot au
 The [verified financial pilot comparison](docs/verified-pilot-experiment.md) is
 complete: financial features did not pass the fixed advancement rule. Improved
 data coverage has not established a stronger replacement model.
+
+The [decision experiment](docs/decision-experiment.md) separately tests sector-relative
+targets, a fixed no-trade rule, and 21/63-session horizons. Selective exposure
+reduced drawdown, but no candidate qualified: the 21-session result failed the
+exposure-matched momentum comparison and the 63-session sample is too small.
+Verified historical analyst-consensus snapshots remain a data requirement;
+the earnings-surprise arm was not run. Production and paper models are unchanged.

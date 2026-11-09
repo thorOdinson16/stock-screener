@@ -27,3 +27,10 @@ on-demand application; no background scheduler or deployment was created.
 See [the financial pilot](financial-pilot.md) for the before/after audit, original
 source review policy and commands, and [the information trial](information-research.md)
 for prospective evaluation rules.
+
+A subsequent [target, abstention and horizon experiment](decision-experiment.md)
+is also complete. Neither horizon qualified. Selective sector-relative signals
+reduced drawdown; the 21-session result failed an exposure-matched momentum
+comparison and the 63-session variant has too few independent cycles. Historical
+consensus data remain unavailable in the repository, so the surprise arm was not
+run. No production or existing paper model changed.
