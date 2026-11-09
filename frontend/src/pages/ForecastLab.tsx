@@ -7,6 +7,8 @@ import { Card, QueryView, StatCard, ErrorState } from "../components/ui";
 import { fmtNum } from "../format";
 import CompletionResearch from "./CompletionResearch";
 import QuantEquations from "./QuantEquations";
+import InformationResearch from "./InformationResearch";
+import FinancialPilot from "./FinancialPilot";
 
 type Metric = { passed: boolean; reasons: string[]; brier?: number; baseline_brier?: number; calibration_error?: number; rows?: number; dates?: number; brier_difference_block_interval?: { blocks: number }; reliability: { predicted: number; observed: number; rows: number; dates: number }[] };
 type Range = { low: number; median: number; high: number };
@@ -34,6 +36,8 @@ export default function ForecastLab() {
     <div className="seg" style={{ marginBottom: 16 }}>{["21", "63"].map(h => <button key={h} className={horizon === h ? "active" : ""} onClick={() => { setHorizon(h); preview.reset(); }}>{h} trading sessions</button>)}</div>
     <div className="grid" style={{ gap: 16 }}>
       <QuantEquations />
+      <InformationResearch />
+      <FinancialPilot />
       <CompletionResearch />
       <QueryView query={tournament}>{r => <Card title="Architecture tournament" subtitle={`21-session historical research · ${r.status.replace(/_/g, " ")}`}>
         <p className="muted">Linear, LightGBM and CatBoost candidates share feature rows and chronological splits. Price-only versus provisional fundamentals, and existing versus execution-aligned targets, are separate arms. The small TCN has a flattened-window LightGBM control using the same historical inputs. Configuration choices and the paper candidate are locked using earlier validation only.</p>

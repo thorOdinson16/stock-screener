@@ -116,3 +116,15 @@ def trade_plan(request: PlanRequest):
         return result
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.get("/research/information")
+def information_research():
+    from ml.evaluation.information_report import read_report
+    return read_report()
+
+
+@router.get("/research/financial-pilot")
+def financial_pilot():
+    from ml.evaluation.pilot_report import read_report
+    return read_report()

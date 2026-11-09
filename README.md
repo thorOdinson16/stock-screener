@@ -239,3 +239,36 @@ calibration and robustness checks. Fresh paired paper signals are recorded; thei
 Six fixed mathematical ranking equations have also been tested against matched
 momentum controls. None established a stronger later trading result.
 [Equations, reproducible experiment and results](docs/quant-equations.md).
+
+A separate **XGBoost/Kalman extension** tests two bounded XGBoost ranker
+configurations per target and a fixed causal Kalman trend rule on a common
+inference pool, with matched current-model, LightGBM and momentum controls.
+Neither established an improvement; Kalman has an unresolved valuation gap.
+[Protocol, results and reproduction](docs/xgb-kalman.md).
+
+A read-only **prediction diagnosis** separates ranking quality by quarter, sector
+and market conditions from actual trading costs and allocation effects. It
+reproduces the frozen base portfolios and retains missing valuations.
+[Method, findings and reproduction](docs/prediction-diagnosis.md).
+
+The **top-20 target experiment** separately tests finer daily relevance labels,
+direct net-return regression and economic configuration selection. No candidate
+passed validation; finer labels did not establish a stronger later result.
+[Controlled comparison and findings](docs/top20-experiment.md).
+
+**Information research** now archives timestamped original NSE filings and
+announcements, verifies quarterly earnings changes, and tests richer peer context.
+The extensions did not establish a historical improvement. A separate immutable
+paper trial has started; financial coverage is sparse and outcomes are pending.
+Forecast Lab exposes the results and coverage. [Sources, limits and commands](docs/information-research.md).
+
+The **fixed financial pilot** now collects multi-year reports from both NSE filing
+systems and audits 20 liquidity-selected stocks on every signal date. Original-report reconciliation resolves all 41 missing quarters: 360/360 cells
+and all 695 historical signal dates meet the unchanged coverage gates. Forecast
+Lab shows readiness and per-stock coverage. This establishes data readiness, not
+a stronger model. Existing frozen paper cohorts collect outcomes on future
+pipeline runs, or independently with `bash scripts/paper_outcomes.sh`. [Pilot audit and commands](docs/financial-pilot.md).
+
+The [verified financial pilot comparison](docs/verified-pilot-experiment.md) is
+complete: financial features did not pass the fixed advancement rule. Improved
+data coverage has not established a stronger replacement model.
