@@ -97,11 +97,11 @@ export default function StockDetail() {
           <div style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ left: 4, right: 16, top: 8 }}>
-                <CartesianGrid stroke="#26304d" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" stroke="#8b93a7" tick={{ fontSize: 11 }} minTickGap={40} />
-                <YAxis stroke="#8b93a7" tick={{ fontSize: 11 }} domain={["auto", "auto"]} width={54} />
-                <Tooltip contentStyle={{ background: "#141a2e", border: "1px solid #26304d", borderRadius: 8 }} />
-                <Line type="monotone" dataKey="close" stroke="#4f8cff" dot={false} strokeWidth={2} name="Close" />
+                <CartesianGrid stroke="#383830" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" stroke="#b5b3a6" tick={{ fontSize: 11 }} minTickGap={40} />
+                <YAxis stroke="#b5b3a6" tick={{ fontSize: 11 }} domain={["auto", "auto"]} width={54} />
+                <Tooltip contentStyle={{ background: "#141412", border: "1px solid #383830", borderRadius: 8 }} />
+                <Line type="monotone" dataKey="close" stroke="#fff9dc" dot={false} strokeWidth={2} name="Close" />
                 <Line type="monotone" dataKey="sma_20" stroke="#f59e0b" dot={false} strokeWidth={1} name="SMA 20" />
                 <Line type="monotone" dataKey="sma_50" stroke="#a78bfa" dot={false} strokeWidth={1} name="SMA 50" />
                 <Line type="monotone" dataKey="sma_200" stroke="#22c55e" dot={false} strokeWidth={1} name="SMA 200" />
@@ -118,13 +118,13 @@ export default function StockDetail() {
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ left: 4, right: 16, top: 8 }}>
-                <CartesianGrid stroke="#26304d" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" stroke="#8b93a7" tick={{ fontSize: 10 }} minTickGap={50} />
-                <YAxis stroke="#8b93a7" tick={{ fontSize: 11 }} domain={[0, 100]} width={40} />
-                <Tooltip contentStyle={{ background: "#141a2e", border: "1px solid #26304d", borderRadius: 8 }} />
+                <CartesianGrid stroke="#383830" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" stroke="#b5b3a6" tick={{ fontSize: 10 }} minTickGap={50} />
+                <YAxis stroke="#b5b3a6" tick={{ fontSize: 11 }} domain={[0, 100]} width={40} />
+                <Tooltip contentStyle={{ background: "#141412", border: "1px solid #383830", borderRadius: 8 }} />
                 <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="4 4" />
                 <ReferenceLine y={30} stroke="#22c55e" strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="rsi_14" stroke="#4f8cff" dot={false} strokeWidth={2} name="RSI" />
+                <Line type="monotone" dataKey="rsi_14" stroke="#fff9dc" dot={false} strokeWidth={2} name="RSI" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -133,12 +133,12 @@ export default function StockDetail() {
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ left: 4, right: 16, top: 8 }}>
-                <CartesianGrid stroke="#26304d" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" stroke="#8b93a7" tick={{ fontSize: 10 }} minTickGap={50} />
-                <YAxis stroke="#8b93a7" tick={{ fontSize: 11 }} width={44} />
-                <Tooltip contentStyle={{ background: "#141a2e", border: "1px solid #26304d", borderRadius: 8 }} />
-                <ReferenceLine y={0} stroke="#47506e" />
-                <Line type="monotone" dataKey="macd" stroke="#4f8cff" dot={false} strokeWidth={2} name="MACD" />
+                <CartesianGrid stroke="#383830" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" stroke="#b5b3a6" tick={{ fontSize: 10 }} minTickGap={50} />
+                <YAxis stroke="#b5b3a6" tick={{ fontSize: 11 }} width={44} />
+                <Tooltip contentStyle={{ background: "#141412", border: "1px solid #383830", borderRadius: 8 }} />
+                <ReferenceLine y={0} stroke="#6d6b5f" />
+                <Line type="monotone" dataKey="macd" stroke="#fff9dc" dot={false} strokeWidth={2} name="MACD" />
                 <Line type="monotone" dataKey="macd_signal" stroke="#f59e0b" dot={false} strokeWidth={1} name="Signal" />
               </LineChart>
             </ResponsiveContainer>

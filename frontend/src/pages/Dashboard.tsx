@@ -104,11 +104,11 @@ export default function Dashboard() {
                 <div style={{ height: 340 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={sectorData} layout="vertical" margin={{ left: 40, right: 20 }}>
-                      <XAxis type="number" stroke="#8b93a7" tickFormatter={(v) => `${v}%`} />
-                      <YAxis type="category" dataKey="industry" width={170} stroke="#8b93a7" tick={{ fontSize: 11 }} />
+                      <XAxis type="number" stroke="#b5b3a6" tickFormatter={(v) => `${v}%`} />
+                      <YAxis type="category" dataKey="industry" width={170} stroke="#b5b3a6" tick={{ fontSize: 11 }} />
                       <Tooltip
                         cursor={{ fill: "rgba(255,255,255,0.04)" }}
-                        contentStyle={{ background: "#141a2e", border: "1px solid #26304d", borderRadius: 8 }}
+                        contentStyle={{ background: "#141412", border: "1px solid #383830", borderRadius: 8 }}
                         formatter={(v) => [`${Number(v).toFixed(2)}%`, "Avg change"]}
                       />
                       <Bar dataKey="avg" radius={[0, 4, 4, 0]}>

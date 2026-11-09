@@ -68,16 +68,16 @@ export default function Model() {
                   <div style={{ height: 220, marginBottom: 12 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ left: 4, right: 16, top: 8 }}>
-                        <XAxis dataKey="name" stroke="#8b93a7" tick={{ fontSize: 11 }} />
-                        <YAxis stroke="#8b93a7" tick={{ fontSize: 11 }} width={54} />
+                        <XAxis dataKey="name" stroke="#b5b3a6" tick={{ fontSize: 11 }} />
+                        <YAxis stroke="#b5b3a6" tick={{ fontSize: 11 }} width={54} />
                         <Tooltip
                           cursor={{ fill: "rgba(255,255,255,0.04)" }}
-                          contentStyle={{ background: "#141a2e", border: "1px solid #26304d", borderRadius: 8 }}
+                          contentStyle={{ background: "#141412", border: "1px solid #383830", borderRadius: 8 }}
                           formatter={(v) => [Number(v).toFixed(4), "IC mean"]}
                         />
                         <Bar dataKey="ic" radius={[4, 4, 0, 0]}>
                           {chartData.map((c) => (
-                            <Cell key={c.name} fill={c.baseline ? "#8b93a7" : "#4f8cff"} />
+                            <Cell key={c.name} fill={c.baseline ? "#b5b3a6" : "#fff9dc"} />
                           ))}
                         </Bar>
                       </BarChart>
