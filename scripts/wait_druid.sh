@@ -46,12 +46,8 @@ PY
       log "Recording published picks and updating forward results"
       spark_submit "$ICEBERG_PKG" "$REPO_ROOT/spark/jobs/track_forward.py" \
         --warehouse "$WAREHOUSE" --druid-url "$DRUID_URL"
-      if [ -f "$REPO_ROOT/ml/evaluation/results/model_tournament_20261108/paper_candidate.json" ]; then
-        log "Updating the separate frozen-candidate paper trial"
-        if ! bash "$REPO_ROOT/scripts/tournament_paper.sh"; then
-          log "Tournament paper tracking failed; the production snapshot is already served. Review the paper-stage error above."
-        fi
-      fi
+      # The frozen-candidate paper trial runs as its own pipeline step
+      # (scripts/paper_tracking.sh) so it cannot hit this task's timeout.
       exit 0
     fi
   fi

@@ -64,6 +64,16 @@ with DAG(
         pool=POOL,
         execution_timeout=timedelta(minutes=5),
     )
+    # Frozen-candidate paper trial. Runs after the production snapshot is served
+    # and the supervisors are suspended; the script never fails the run itself
+    # (it records errors in the trial's own status file) and is a no-op when no
+    # candidate has been frozen.
+    paper_tracking = BashOperator(
+        task_id="paper_tracking",
+        bash_command=step("paper_tracking.sh"),
+        pool=POOL,
+        execution_timeout=timedelta(minutes=60),
+    )
 
     (
         preflight
@@ -77,4 +87,5 @@ with DAG(
         >> druid_wait
         >> druid_suspend
         >> collect_metrics
+        >> paper_tracking
     )
