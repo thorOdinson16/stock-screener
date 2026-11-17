@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from poller.paper_observations import completed, merge_observations, held_window_revisions, unique_revisions, verify_frozen
+from paper_observations import completed, merge_observations, held_window_revisions, unique_revisions, verify_frozen
 from ml.evaluation.forward_tracking import IST
 
 
@@ -43,7 +43,7 @@ class ObservationTests(unittest.TestCase):
             model=root/'model';model.write_bytes(b'frozen weights')
             protocol=root/'protocol.json';protocol.write_text(json.dumps({'source_hashes':{'rules.py':digest(source)}}))
             (root/'paper_models.json').write_text(json.dumps({'protocol_sha256':digest(protocol),'models':{'candidate':{'file':'model','sha256':digest(model)}}}))
-            with patch('poller.paper_observations.ROOT',root):
+            with patch('paper_observations.ROOT',root):
                 verify_frozen(root)
                 source.write_text('changed rules')
                 with self.assertRaisesRegex(RuntimeError,'Frozen trial source changed'):verify_frozen(root)

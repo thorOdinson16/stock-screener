@@ -1,0 +1,19 @@
+# Everything needed to run the unit tests: pip install -r requirements-dev.txt
+# (pyspark is NOT needed; the Spark/Iceberg integration tests are opt-in.)
+pytest>=8,<10
+# Match the Spark venv (setup.md): asof.py needs pandas 2.x semantics, and the
+# unpinned pandas that yfinance pulls into the poller venv (3.x) breaks it.
+numpy==1.26.4
+pandas==2.2.3
+scipy>=1.11,<2
+requests>=2.31,<3
+fastapi>=0.115,<1.0
+httpx>=0.27
+confluent-kafka==2.15.0
+yfinance==1.7.0
+# Research-layer tests; they skip themselves when these are missing.
+scikit-learn>=1.5,<2
+lightgbm==4.6.0
+catboost==1.2.8
+xgboost-cpu==2.1.4
+# torch (CPU) is optional: tests that need it skip without it.
