@@ -36,6 +36,7 @@ import yfinance as yf
 from kafka_producer import MarketDataProducer
 from universe.universe import Stock, get_universe
 from incremental import history_start, adjustment_revision
+from runchecks import fraction, positive_int, require_success_rate, DEFAULT_MAX_FAILURE_FRACTION
 
 logging.basicConfig(
     level=logging.INFO,
@@ -154,8 +155,12 @@ def main():
     parser.add_argument("--delay", type=float, default=0.5, help="Seconds between symbols")
     parser.add_argument("--bootstrap-servers", default="localhost:9092")
     parser.add_argument(
-        "--universe-limit", type=int, default=None,
+        "--universe-limit", type=positive_int, default=None,
         help="Limit universe to first N symbols (for testing)",
+    )
+    parser.add_argument(
+        "--max-failure-fraction", type=fraction, default=DEFAULT_MAX_FAILURE_FRACTION,
+        help="Exit non-zero when more than this fraction of symbols return no bars",
     )
     parser.add_argument("--topic", default=DAILY_TOPIC)
     parser.add_argument(
@@ -230,6 +235,7 @@ def main():
             if pending:
                 producer.publish_many(args.topic, pending)
                 producer.flush()
+                producer.raise_on_failure()
                 total_records += len(pending)
                 pending.clear()
             logger.info(
@@ -251,6 +257,9 @@ def main():
         args.topic,
         elapsed,
     )
+    # Incremental runs re-fetch an overlap, so a symbol with no bars at all means
+    # the fetch failed (or the symbol is delisted); mass failure means rate limiting.
+    require_success_rate(succeeded, len(universe), "Daily-bar fetch", args.max_failure_fraction)
 
 
 if __name__ == "__main__":

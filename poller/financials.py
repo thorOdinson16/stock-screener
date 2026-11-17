@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 import yfinance as yf
 
 from kafka_producer import MarketDataProducer
+from runchecks import fraction, positive_int, require_success_rate, DEFAULT_MAX_FAILURE_FRACTION
 from universe.universe import Stock, get_universe
 
 logging.basicConfig(
@@ -105,7 +106,9 @@ def main():
     parser.add_argument("--batch-size", type=int, default=50, help="Symbols per Kafka flush")
     parser.add_argument("--delay", type=float, default=0.3, help="Seconds between symbols")
     parser.add_argument("--bootstrap-servers", default="localhost:9092")
-    parser.add_argument("--universe-limit", type=int, default=None)
+    parser.add_argument("--universe-limit", type=positive_int, default=None)
+    parser.add_argument("--max-failure-fraction", type=fraction, default=DEFAULT_MAX_FAILURE_FRACTION,
+                        help="Exit non-zero when more than this fraction of symbols return no statements")
     parser.add_argument("--topic", default=FINANCIALS_TOPIC)
     args = parser.parse_args()
 
@@ -129,6 +132,7 @@ def main():
             if pending:
                 producer.publish_many(args.topic, pending)
                 producer.flush()
+                producer.raise_on_failure()
                 total += len(pending)
                 pending.clear()
             logger.info("Progress: %d/%d symbols, %d statements (%.0fs)",
@@ -137,6 +141,7 @@ def main():
 
     logger.info("Done: %d/%d symbols, %d statements published to %s.",
                 succeeded, len(universe), total, args.topic)
+    require_success_rate(succeeded, len(universe), "Financial-statement fetch", args.max_failure_fraction)
 
 
 if __name__ == "__main__":

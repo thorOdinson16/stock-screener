@@ -17,6 +17,7 @@ class MarketDataProducer:
         self._producer = Producer({"bootstrap.servers": bootstrap_servers})
         self._delivered = 0
         self._failed = 0
+        self._undelivered = 0
 
     def _delivery_callback(self, err, msg):
         if err is not None:
@@ -44,6 +45,7 @@ class MarketDataProducer:
         """Blocks until all queued messages are delivered or timeout is reached.
         Returns the number of messages still undelivered (0 = full success)."""
         remaining = self._producer.flush(timeout)
+        self._undelivered = remaining
         logger.info(
             "Flush complete: %d delivered, %d failed, %d still queued.",
             self._delivered,
@@ -51,3 +53,14 @@ class MarketDataProducer:
             remaining,
         )
         return remaining
+
+    def raise_on_failure(self) -> None:
+        """Raise if any message failed delivery or is still queued after a flush.
+
+        Delivery failures are otherwise only logged, so a run that lost data to
+        Kafka would exit 0 and look successful."""
+        if self._failed or self._undelivered:
+            raise RuntimeError(
+                f"Kafka delivery incomplete: {self._failed} failed, "
+                f"{self._undelivered} undelivered, {self._delivered} delivered."
+            )
