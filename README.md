@@ -122,6 +122,11 @@ top-20 outcomes, costs, benchmark comparisons and monthly consistency), plus
 **Trade Planner** (capital, whole-share sizing, exposure and risk limits). Data updates only when you run the
 pipeline and then click **Refresh data** in the sidebar — no background polling.
 
+The frozen research experiments (calibration, tournament, quant equations, filings and
+paper-trial status) are **not part of the main dashboard**: they live on a separate page at
+`/research` that is not linked from the sidebar (`frontend/src/research/`). Nothing was
+removed; the page and its API endpoints still work.
+
 See `setup.md` for the full ingestion + ML runbook.
 
 ## Configuration
@@ -216,13 +221,13 @@ whether retraining used this policy. Temporary 21-day, sector-relative and
 Activation, methodology, remaining data requirements and tests:
 [docs/retail-research.md](docs/retail-research.md).
 
-**Forecast Lab** assesses profit probabilities and net-return bands against later
+The **research page** (`/research`) assesses profit probabilities and net-return bands against later
 historical outcomes. Both tested probability models failed the baseline checks;
 live confidence figures remain withheld. The page exposes the evidence and
 corporate-action valuation gaps. Reproduction and results:
 [docs/forecast-calibration.md](docs/forecast-calibration.md).
 
-Forecast Lab also compares the 21-session walk-forward model with simple momentum
+The research page also compares the 21-session walk-forward model with simple momentum
 and an all-eligible equal-target portfolio under common execution rules. A separate
 equal-notional diagnostic distinguishes stock selection from cash allocation.
 [Protocol and measured results](docs/baseline-comparison.md).
@@ -261,7 +266,7 @@ passed validation; finer labels did not establish a stronger later result.
 announcements, verifies quarterly earnings changes, and tests richer peer context.
 The extensions did not establish a historical improvement. A separate immutable
 paper trial has started; financial coverage is sparse and outcomes are pending.
-Forecast Lab exposes the results and coverage. [Sources, limits and commands](docs/information-research.md).
+The research page exposes the results and coverage. [Sources, limits and commands](docs/information-research.md).
 
 The **fixed financial pilot** now collects multi-year reports from both NSE filing
 systems and audits 20 liquidity-selected stocks on every signal date. Original-report reconciliation resolves all 41 missing quarters: 360/360 cells

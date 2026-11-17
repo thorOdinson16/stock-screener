@@ -6,7 +6,6 @@ const NAV = [
   { to: "/", label: "Dashboard", icon: "▦" },
   { to: "/picks", label: "Top Picks", icon: "★" },
   { to: "/trade-plan", label: "Trade Planner", icon: "◇" },
-  { to: "/forecasts", label: "Forecast Lab", icon: "◎" },
   { to: "/screener", label: "Screener", icon: "⚲" },
   { to: "/model", label: "Model", icon: "◈" },
   { to: "/performance", label: "Track Record", icon: "◷" },

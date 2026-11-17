@@ -8,7 +8,8 @@ import Model from "./pages/Model";
 import Ops from "./pages/Ops";
 import Performance from "./pages/Performance";
 import TradePlan from "./pages/TradePlan";
-import ForecastLab from "./pages/ForecastLab";
+// Frozen research results: kept in the repo, reachable at /research, not linked from the UI.
+import ForecastLab from "./research/ForecastLab";
 
 export default function App() {
   return (
@@ -21,7 +22,7 @@ export default function App() {
         <Route path="model" element={<Model />} />
         <Route path="performance" element={<Performance />} />
         <Route path="trade-plan" element={<TradePlan />} />
-        <Route path="forecasts" element={<ForecastLab />} />
+        <Route path="research" element={<ForecastLab />} />
         <Route path="ops" element={<Ops />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
