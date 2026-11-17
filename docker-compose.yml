@@ -30,14 +30,17 @@ services:
       target: platform
     command: ["net"]
     restart: unless-stopped
+    # Published on loopback only: Druid, Kafka, HDFS and the API have no
+    # authentication (and Airflow defaults to admin/admin). Set BIND_ADDR=0.0.0.0
+    # in .env to expose them on your network.
     ports:
-      - "5173:5173"   # dashboard
-      - "8000:8000"   # FastAPI
-      - "8080:8080"   # Airflow
-      - "8888:8888"   # Druid console
-      - "9870:9870"   # HDFS NameNode UI
-      - "9092:9092"   # Kafka
-      - "5801:5801"   # SeaTunnel Zeta
+      - "${BIND_ADDR:-127.0.0.1}:5173:5173"   # dashboard
+      - "${BIND_ADDR:-127.0.0.1}:8000:8000"   # FastAPI
+      - "${BIND_ADDR:-127.0.0.1}:8080:8080"   # Airflow
+      - "${BIND_ADDR:-127.0.0.1}:8888:8888"   # Druid console
+      - "${BIND_ADDR:-127.0.0.1}:9870:9870"   # HDFS NameNode UI
+      - "${BIND_ADDR:-127.0.0.1}:9092:9092"   # Kafka
+      - "${BIND_ADDR:-127.0.0.1}:5801:5801"   # SeaTunnel Zeta
 
   namenode:
     <<: *platform

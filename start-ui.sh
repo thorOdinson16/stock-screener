@@ -5,10 +5,14 @@
 # to be running for data to appear.
 #
 # Logs: ~/stack-logs/ui-*.log   PIDs: ~/stack-logs/pids/ui-*.pid
+#
+# Both servers bind to loopback by default: the API has no authentication and
+# can start long pipeline runs. Set UI_BIND=0.0.0.0 to expose them on your LAN.
 
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UI_BIND="${UI_BIND:-127.0.0.1}"
 LOG_DIR="$HOME/stack-logs"
 PID_DIR="$LOG_DIR/pids"
 mkdir -p "$LOG_DIR" "$PID_DIR"
@@ -39,7 +43,7 @@ fi
 
 log "Starting FastAPI backend on :8000..."
 setsid env PYTHONPATH="$REPO_ROOT" "$REPO_ROOT/api/.venv/bin/uvicorn" api.main:app \
-  --host 0.0.0.0 --port 8000 >> "$LOG_DIR/ui-api.log" 2>&1 < /dev/null &
+  --host "$UI_BIND" --port 8000 >> "$LOG_DIR/ui-api.log" 2>&1 < /dev/null &
 echo $! > "$PID_DIR/ui-api.pid"
 wait_for_port 8000 "FastAPI backend" 30 || exit 1
 
@@ -51,7 +55,7 @@ fi
 
 log "Starting Vite dev server on :5173..."
 ( cd "$REPO_ROOT/frontend" && \
-  setsid ./node_modules/.bin/vite --host 0.0.0.0 --port 5173 >> "$LOG_DIR/ui-vite.log" 2>&1 < /dev/null & \
+  setsid ./node_modules/.bin/vite --host "$UI_BIND" --port 5173 >> "$LOG_DIR/ui-vite.log" 2>&1 < /dev/null & \
   echo $! > "$PID_DIR/ui-vite.pid" )
 wait_for_port 5173 "Vite dev server" 40 || exit 1
 

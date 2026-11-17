@@ -10,7 +10,7 @@ DAGs on behalf of the dashboard.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api import airflow as af
 
@@ -27,7 +27,9 @@ ALL_DAGS = (af.DAG_ON_DEMAND, af.DAG_RETRAIN, af.DAG_MAINTENANCE)
 
 class RunRequest(BaseModel):
     full: bool = False
-    universe_limit: int | None = None
+    # A zero/negative limit used to reach the poller, where a negative value
+    # sliced the universe from the end.
+    universe_limit: int | None = Field(default=None, ge=1, le=5000)
     publish_history: bool = False
 
 
@@ -62,14 +64,19 @@ def _serialize(dag_id: str, run: dict, task_instances: list[dict] | None = None)
     }
 
 
-@router.post("/run")
-def run_pipeline(req: RunRequest):
+def _ensure_idle() -> None:
+    """409 when any screening DAG is already running (they share one pool slot)."""
     active = af.find_active_run()
     if active:
         raise HTTPException(
             status_code=409,
             detail={"message": "A pipeline run is already active", "run": _serialize(active["dag_id"], active)},
         )
+
+
+@router.post("/run")
+def run_pipeline(req: RunRequest):
+    _ensure_idle()
     try:
         run = af.trigger_dag(
             af.DAG_ON_DEMAND,
@@ -82,12 +89,7 @@ def run_pipeline(req: RunRequest):
 
 @router.post("/retrain")
 def retrain_pipeline():
-    active = af.find_active_run()
-    if active:
-        raise HTTPException(
-            status_code=409,
-            detail={"message": "A pipeline run is already active", "run": _serialize(active["dag_id"], active)},
-        )
+    _ensure_idle()
     try:
         run = af.trigger_dag(af.DAG_RETRAIN, {})
     except af.AirflowError as e:
@@ -97,12 +99,7 @@ def retrain_pipeline():
 
 @router.post("/maintenance")
 def maintenance_pipeline():
-    active = af.find_active_run()
-    if active:
-        raise HTTPException(
-            status_code=409,
-            detail={"message": "A pipeline run is already active", "run": _serialize(active["dag_id"], active)},
-        )
+    _ensure_idle()
     try:
         run = af.trigger_dag(af.DAG_MAINTENANCE, {})
     except af.AirflowError as e:
