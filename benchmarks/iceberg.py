@@ -143,6 +143,17 @@ def main():
             payload[name] = {"error": str(e)}
         print(f"{name}: {payload[name]}")
 
+    # The demo tables live in the production warehouse; do not leave them behind.
+    for table in ("evolution", "partitioned"):
+        try:
+            spark.sql(f"DROP TABLE IF EXISTS iceberg.bench.{table}")
+        except Exception as e:  # noqa: BLE001 — cleanup must not lose the results
+            print(f"cleanup of bench.{table} failed: {e}")
+    try:
+        spark.sql("DROP NAMESPACE IF EXISTS iceberg.bench")
+    except Exception as e:  # noqa: BLE001
+        print(f"cleanup of namespace bench failed: {e}")
+
     os.makedirs(_OUT, exist_ok=True)
     with open(os.path.join(_OUT, "iceberg.json"), "w") as fh:
         json.dump(payload, fh, indent=2, default=str)

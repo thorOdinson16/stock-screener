@@ -182,5 +182,13 @@ def write_text(dirname: str, filename: str, text: str) -> str:
     return path
 
 
+def stage_duration(result: dict, stage: str):
+    """Seconds spent in one stage of a run_pipeline() result (None if absent)."""
+    for s in result["stages"]:
+        if s["stage"] == stage:
+            return s["seconds"]
+    return None
+
+
 def stage_seconds(result: dict) -> dict:
     return {s["stage"]: round(s["seconds"], 3) for s in result["stages"]}

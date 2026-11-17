@@ -18,6 +18,7 @@ from common import (
     REPO_ROOT,
     percentile,
     run_pipeline,
+    stage_duration,
     stage_seconds,
     wait_for_fresh_snapshot,
     write_json,
@@ -39,22 +40,24 @@ def main():
         started = time.time()
         result = run_pipeline(full=args.full, limit=args.limit,
                               log_dir=os.path.join(REPO_ROOT, "benchmarks", "latency", "logs"))
-        serving_end = started + sum(
-            s["seconds"] for s in result["stages"] if s["stage"] in ("ingest", "indicators", "score", "serving")
-        )
+        # Publish -> Druid hand-off is exactly what the wait_druid stage blocks
+        # on. (This used to subtract a hand-picked subset of stages from the wall
+        # clock, which silently included the poll time: the "handoff" it reported
+        # equalled the poll duration.)
+        handoff = stage_duration(result, "wait_druid")
         fresh = wait_for_fresh_snapshot(timeout=args.timeout)
         run = {
             "stages": result["stages"],
             "total_seconds": round(time.time() - started, 3),
             "druid_ready": fresh["ready"],
-            "druid_handoff_seconds": round(time.time() - serving_end, 3),
+            "druid_handoff_seconds": round(handoff, 3) if handoff is not None else None,
             "snapshot_time": fresh["snapshot_time"],
         }
         runs.append(run)
         print(f"  total={run['total_seconds']}s handoff={run['druid_handoff_seconds']}s")
 
     totals = [r["total_seconds"] for r in runs]
-    handoffs = [r["druid_handoff_seconds"] for r in runs]
+    handoffs = [r["druid_handoff_seconds"] for r in runs if r["druid_handoff_seconds"] is not None]
     summary = {
         "config": {"repeat": args.repeat, "limit": args.limit, "full": args.full},
         "end_to_end_p50": percentile(totals, 0.5),
