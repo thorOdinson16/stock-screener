@@ -22,6 +22,7 @@ def test_paper_feature_parity():
     from transform import transform_group, TECHNICAL_FEATURES
     from ml.evaluation.corporate_actions import load_events, fingerprint
     import export_tournament_live
+    from pyspark.sql import functions as F
     with tempfile.TemporaryDirectory(prefix="tournament-live-") as directory:
         base = Path(directory)
         warehouse = (base / "warehouse").as_uri()
@@ -37,7 +38,9 @@ def test_paper_feature_parity():
             rows = []
             for s, factor in [("TEST_A.NS", 1.), ("TEST_B.NS", 1.8), ("^NSEI", 100.)]:
                 for i, day in enumerate(days):
-                    close = factor * (100 + .1 * i + math.sin(i * .23))
+                    # Cent precision: silver stores close as DECIMAL(18,2), so rounding here keeps
+                    # the decimal round trip lossless and the comparison below exact.
+                    close = round(factor * (100 + .1 * i + math.sin(i * .23)), 2)
                     rows.append((s, day, close, close * .99, close, 1000000, datetime.now()))
             raw = spark.createDataFrame(rows, "symbol string, trade_date date, open double, low double, close double, volume long, ingested_at timestamp")
             spark.sql("CREATE NAMESPACE iceberg.bronze")
@@ -46,7 +49,10 @@ def test_paper_feature_parity():
             raw_pdf = raw.select("symbol", "trade_date", "close", "volume").toPandas()
             silver_pdf = pd.concat([compute_features(g) for _, g in raw_pdf.groupby("symbol")], ignore_index=True)
             feature_rows = [tuple(r[c] for c in FEATURE_SCHEMA.fieldNames()) for r in silver_pdf.to_dict("records")]
-            spark.createDataFrame(feature_rows, FEATURE_SCHEMA).writeTo("iceberg.silver.quotes_enriched").using("iceberg").create()
+            # Production silver stores close as DECIMAL(18,2) (iceberg/schemas/silver-schema.sql).
+            # Mirroring that is what exposes consumers that forget to cast it to double.
+            silver = spark.createDataFrame(feature_rows, FEATURE_SCHEMA).withColumn("close", F.col("close").cast("decimal(18,2)"))
+            silver.writeTo("iceberg.silver.quotes_enriched").using("iceberg").create()
             digest = fingerprint(load_events())
             spark.sql(f"ALTER TABLE iceberg.silver.quotes_enriched SET TBLPROPERTIES ('quality.policy.digest'='{digest}')")
             expected = transform_group(silver_pdf[silver_pdf.trade_date == days[-1]])

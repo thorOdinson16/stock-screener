@@ -49,7 +49,11 @@ def main():
         start = (datetime.fromisoformat(latest) - timedelta(days=65)).date().isoformat()
         silver = spark.read.option("snapshot-id", snapshots["silver.quotes_enriched"]).table(silver_name)
         base = silver.filter((F.col("trade_date") >= F.lit(start).cast("date")) &
-                             (F.col("trade_date") <= F.lit(latest).cast("date"))).select("symbol", "trade_date", "close", *RAW_FEATURE_COLUMNS)
+                             (F.col("trade_date") <= F.lit(latest).cast("date"))).select(
+            "symbol", "trade_date",
+            # silver stores close as DECIMAL(18,2); pandas cannot divide Decimal by float
+            # (the production scorer casts it the same way).
+            F.col("close").cast("double").alias("close"), *RAW_FEATURE_COLUMNS)
         # Training normalizes the full cross-section including benchmarks, then
         # removes benchmark rows. Preserve that exact order for paper inference.
         features = base.groupBy("trade_date").applyInPandas(transform_group, schema=NORMALIZED_SCHEMA)

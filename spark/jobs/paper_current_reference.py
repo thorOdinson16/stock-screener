@@ -71,7 +71,9 @@ def main():
         # Reproduce the current serving chain, including its stock-only
         # normalization and legacy annual features; do not substitute new inputs.
         latest = indicators.filter((F.col("trade_date") == F.lit(manifest["last_session"]).cast("date")) & ~F.col("symbol").startswith("^"))
-        base = latest.select("symbol", "trade_date", "close", *RAW_FEATURE_COLUMNS)
+        # silver stores close as DECIMAL(18,2); cast like score_stocks does or pandas raises
+        # "Decimal / float" inside the normalisation.
+        base = latest.select("symbol", "trade_date", F.col("close").cast("double").alias("close"), *RAW_FEATURE_COLUMNS)
         financial_before = str(spark.sql("SELECT snapshot_id FROM iceberg.silver.financial_statements.snapshots ORDER BY committed_at DESC LIMIT 1").first().snapshot_id)
         enriched = attach_fundamentals(spark, base)
         features = enriched.groupBy("trade_date").applyInPandas(transform_group, schema=NORMALIZED_SCHEMA)
