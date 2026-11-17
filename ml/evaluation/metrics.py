@@ -245,14 +245,13 @@ def turnover(
     k: int = DEFAULT_K,
     date_col: str = "trade_date",
 ) -> float:
-    """Average fraction of the top-k set that changes between consecutive dates."""
+    """Average fraction of the top-k set that is new relative to the previous date."""
     data = df.dropna(subset=[score_col])
     rates = []
     previous = None
     for _, group in data.groupby(date_col):
         current = set(group.nlargest(k, score_col)[symbol_col])
         if previous is not None and current:
-            union = current | previous
-            rates.append(1.0 - len(current & previous) / len(union) if union else 0.0)
+            rates.append(len(current - previous) / len(current))
         previous = current
     return float(np.mean(rates)) if rates else np.nan

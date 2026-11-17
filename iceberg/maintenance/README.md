@@ -8,9 +8,13 @@ Runs per table (`spark/jobs/maintain_iceberg.py`):
 | `rewrite_manifests`  | Spark procedure | consolidates manifest files |
 | `expire_snapshots`   | driver-side Iceberg API | drops snapshots older than N days and their unreferenced files |
 
-Tables: `bronze.{market_quotes,quotes_daily,market_fundamentals}`,
-`silver.{quotes_enriched,fundamentals_clean}`, `gold.{stock_scores,top_picks}`,
-`ml.training_dataset`.
+Tables: `bronze.{market_quotes,quotes_daily,market_fundamentals,financial_statements}`,
+`silver.{quotes_enriched,fundamentals_clean,financial_statements}`,
+`gold.{stock_scores,top_picks}`, `ml.training_dataset`.
+
+`ml.training_dataset` keeps its snapshots for 90 days (`--training-retention-days`)
+rather than the default 7: `evaluate.py` records its snapshot id so an experiment can
+be reproduced by time travel, which only works while that snapshot exists.
 
 **Orphan-file cleanup is intentionally not included** — the bundled
 `iceberg-spark-runtime` does not ship `org.apache.iceberg.actions.RemoveOrphanFiles`,

@@ -24,12 +24,16 @@ TRADING_DAYS_PER_YEAR = 252
 
 
 def _turnover(previous, current) -> float:
+    """Fraction of the new equal-weight portfolio that was not already held.
+
+    (Jaccard distance, 1 - |A&B| / |A|B|, double counts a swap and overstated
+    trading cost: with 20 names and 10 kept it gave 0.67 instead of 0.5.)
+    """
     if previous is None:
         return 1.0
     if not current:
         return 0.0
-    union = previous | current
-    return 1.0 - len(previous & current) / len(union) if union else 0.0
+    return len(current - previous) / len(current)
 
 
 def _ann_stats(net: pd.Series, horizon: int) -> dict:

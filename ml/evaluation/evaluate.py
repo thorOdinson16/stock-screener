@@ -63,6 +63,7 @@ from walk_forward import (  # noqa: E402
     purged_kfold_folds,
 )
 from rules import rule_score  # noqa: E402
+from selection_gate import gate_failures  # noqa: E402
 from registry import record as record_experiment  # noqa: E402
 from train_model import estimator  # noqa: E402
 
@@ -78,6 +79,12 @@ MODEL_LOADERS = {
 }
 
 ENSEMBLE_NAME = "rank_ensemble"
+
+# The multiple-testing denominator counts the models evaluated in this run, but
+# roughly this many other configurations were tried during the research that
+# chose the features and model families (docs/model-research.md). Counting them
+# keeps the deflated Sharpe from being flattered by forgotten trials.
+PRIOR_RESEARCH_TRIALS = 15
 
 # Non-model keys inside results["labels"][label] (filled after selection).
 FOLD_KEYS = {"walk_forward", "purged_kfold"}
@@ -393,6 +400,10 @@ def main():
     parser.add_argument("--cost-bps", type=float, default=DEFAULT_COST_BPS)
     parser.add_argument("--skip-walk-forward", action="store_true")
     parser.add_argument(
+        "--force-select", action="store_true",
+        help="Replace ml/models/selected.json even if the new pick shows no positive IC.",
+    )
+    parser.add_argument(
         "--coverage-threshold", type=float, default=0.9,
         help="Fraction of trading dates a symbol must appear on for the "
              "full-history robustness run.",
@@ -416,7 +427,7 @@ def main():
     now = datetime.now(timezone.utc).isoformat()
 
     # Multiple-testing denominator: every model (plus the ensemble) on every label.
-    n_trials = sum(len(models) + 1 for models in registry["labels"].values())
+    n_trials = sum(len(models) + 1 for models in registry["labels"].values()) + PRIOR_RESEARCH_TRIALS
 
     results = {
         "evaluated_at": now, "k": args.k, "cost_bps": args.cost_bps,
@@ -557,6 +568,18 @@ def main():
         json.dump(_clean(results), fh, indent=2)
 
     selected_path = os.path.join(args.models_dir, "selected.json")
+    # Never silently replace a working model with one that shows no edge. The
+    # first ever run (no selected.json yet) is always written so the platform
+    # can start; --force-select overrides the gate.
+    failures = gate_failures(results, selected)
+    blocked = bool(failures) and os.path.exists(selected_path) and not args.force_select
+    if blocked:
+        selected_path = os.path.join(args.models_dir, "selected.rejected.json")
+        print("SELECTION REJECTED — the published model is unchanged:")
+        for reason in failures:
+            print(f"  - {reason}")
+    elif failures:
+        print("WARNING: selected model shows no positive IC: " + "; ".join(failures))
     with open(selected_path, "w") as fh:
         json.dump(_clean(selected), fh, indent=2)
 
@@ -573,6 +596,12 @@ def main():
     print(f"wrote {selected_path}")
 
     spark.stop()
+    if blocked:
+        # Non-zero so the Airflow retrain task (and the dashboard) shows a failure.
+        raise SystemExit(
+            "Retrain finished but the new model was not adopted; see "
+            f"{selected_path}. Re-run with --force-select to override."
+        )
 
 
 def _write_markdown(results, path):

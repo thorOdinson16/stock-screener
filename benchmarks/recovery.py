@@ -58,7 +58,7 @@ def total_lag(text: str):
 
 
 def kafka_lag(env) -> dict:
-    kafka_home = env.get("KAFKA_HOME", "/home/abhi/kafka")
+    kafka_home = env.get("KAFKA_HOME", os.path.expanduser("~/kafka"))
     result = run_cmd([
         os.path.join(kafka_home, "bin", "kafka-consumer-groups.sh"),
         "--bootstrap-server", env.get("KAFKA_BOOTSTRAP", "localhost:9092"),
