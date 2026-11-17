@@ -26,6 +26,24 @@ write-once file helper; `audit_published.py` hard-codes its own corporate-action
 downloaded NSE XML is parsed with stdlib `ElementTree` (prefer `defusedxml` in the next
 versioned trial); `try: from .x import ... except ImportError` dual imports.
 
+## The universe cache is refreshed by hand
+
+`poller/universe/universe_cache.json` is hash-pinned by the research manifests, so the
+poller no longer re-downloads it when it gets old (it used to, weekly; that marked every
+research panel stale and made the frozen paper-trial stages fail with "Feature source
+changed"). It is fetched only when missing, or on request:
+
+```bash
+python poller/universe/universe.py --refresh   # prints what was added/removed
+python scripts/pinned_sources.py --verify      # shows which evidence that invalidated
+```
+
+The log warns when the cache is older than about 200 days (NIFTY rebalances in March and
+September). Until you refresh, new constituents are not polled and renamed or removed
+stocks stay in the list. A refresh stales the research evidence tied to the old file and
+stops the frozen paper trial; resume it by freezing a new versioned trial on the new
+universe, or retire the trial.
+
 ## Train/serve normalisation parity
 
 Training (`build_training.py`), the research exports and the paper control normalise

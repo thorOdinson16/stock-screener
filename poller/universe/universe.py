@@ -2,8 +2,17 @@
 universe.py — fetches and caches the NIFTY 500 constituent list from NSE India.
 
 NSE serves this as a public CSV, but blocks requests without a browser-like User-Agent
-(returns 403 otherwise). The list changes rarely (semi-annual rebalance), so we cache it
-locally and only re-fetch when the cache is missing or stale.
+(returns 403 otherwise).
+
+The cache is only (re)fetched when it is MISSING or when you ask explicitly:
+
+    python poller/universe/universe.py --refresh
+
+It is deliberately not refreshed by age. Frozen research manifests record the sha256
+of universe_cache.json, so a silent weekly rewrite marked every research panel stale
+and made the frozen paper-trial stages fail ("Feature source changed"). The index only
+rebalances in March and September; refresh by hand then, and expect the research
+evidence tied to the old file to read as stale (see docs/known-limitations.md).
 """
 
 import csv
@@ -30,7 +39,8 @@ _HEADERS = {
 }
 
 CACHE_PATH = Path(__file__).parent / "universe_cache.json"
-CACHE_MAX_AGE_SECONDS = 7 * 24 * 3600  # 1 week — index rebalances semi-annually, this is generous
+# Warn (never refetch) when the cache is older than this: the index rebalances twice a year.
+STALE_WARNING_SECONDS = 200 * 24 * 3600
 
 
 @dataclass(frozen=True)
@@ -95,9 +105,12 @@ def _read_cache() -> list[Stock] | None:
         return None
 
     age = time.time() - payload.get("fetched_at", 0)
-    if age > CACHE_MAX_AGE_SECONDS:
-        logger.info("Universe cache is %.1f days old — refreshing.", age / 86400)
-        return None
+    if age > STALE_WARNING_SECONDS:
+        logger.warning(
+            "Universe cache is %.0f days old; new index constituents are not being "
+            "picked up. Refresh deliberately with: python poller/universe/universe.py --refresh",
+            age / 86400,
+        )
 
     return [Stock(**s) for s in payload["stocks"]]
 
@@ -131,8 +144,33 @@ def get_universe(force_refresh: bool = False) -> list[Stock]:
         ) from e
 
 
+def refresh() -> int:
+    """Fetch from NSE, overwrite the cache and report what changed."""
+    before = {s.yf_symbol for s in _read_cache() or []}
+    after = {s.yf_symbol for s in get_universe(force_refresh=True)}
+    print(f"Universe refreshed: {len(after)} stocks "
+          f"(+{len(after - before)} added, -{len(before - after)} removed).")
+    for label, symbols in (("added", after - before), ("removed", before - after)):
+        if symbols:
+            print(f"  {label}: {', '.join(sorted(symbols))}")
+    print(
+        "\nNOTE: universe_cache.json is hash-pinned by frozen research manifests. Run\n"
+        "  python scripts/pinned_sources.py --verify\n"
+        "to see which evidence now reads as stale; the frozen paper-trial stages will\n"
+        "refuse to run until a new versioned trial is frozen on the new universe."
+    )
+    return 0
+
+
 if __name__ == "__main__":
+    import argparse
+    import sys
+
     logging.basicConfig(level=logging.INFO)
+    parser = argparse.ArgumentParser(description="Show or deliberately refresh the NIFTY 500 universe cache")
+    parser.add_argument("--refresh", action="store_true", help="re-download from NSE and overwrite the cache")
+    if parser.parse_args().refresh:
+        sys.exit(refresh())
     universe = get_universe()
     print(f"Universe size: {len(universe)}")
     print("First 5:", [s.yf_symbol for s in universe[:5]])

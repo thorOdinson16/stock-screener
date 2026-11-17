@@ -474,6 +474,13 @@ spark-submit --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.8.1 
 python benchmarks/scalability.py --masters "local[4]" "local[8]" --limit 100   # exp 6
 ```
 
+## Universe refresh
+
+The NIFTY 500 list (`poller/universe/universe_cache.json`) is not refreshed automatically.
+After an index rebalance (March / September) run
+`python poller/universe/universe.py --refresh`. This invalidates the hash-pinned research
+evidence; see `docs/known-limitations.md` before doing it.
+
 ## Iceberg maintenance
 
 Compacts small files, rewrites manifests and expires snapshots older than 7 days
