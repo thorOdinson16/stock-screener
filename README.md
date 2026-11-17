@@ -9,7 +9,7 @@ DAG) and it refreshes the whole universe end to end. Nothing runs continuously: 
 supervisors stay suspended at rest and are resumed only for the duration of a run, then suspended
 again; the dashboard refreshes only when you click **Refresh data**.
 
-Full spec: see `docs/project-spec.md`.
+Full spec: see `docs/project-spec.md`. Known limitations and deliberate non-changes: `docs/known-limitations.md`.
 
 ## Pipeline
 
@@ -37,7 +37,8 @@ Stages (each is a `scripts/` wrapper run as an Airflow task):
 7. **serve** – publish the latest snapshot to Kafka (history published incrementally)
 8. **wait_for_druid** – block until Druid is serving the fresh snapshot
 9. **druid_wait / druid_suspend** – wait for lag to drain, then suspend the supervisors
-10. **collect_metrics** – snapshot operations metrics
+10. **collect_metrics** – snapshot operations metrics and run the advisory data-quality checks
+11. **paper_tracking** – update the frozen-candidate paper trial (no-op unless one exists; never fails the run)
 
 ## Stack (native install, no Docker for core services)
 

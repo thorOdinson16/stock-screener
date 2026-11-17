@@ -1,4 +1,6 @@
 yfinance==1.7.0
+# yfinance does not pin pandas; 3.x breaks pandas-2 era code (see requirements-dev.txt).
+pandas>=2.1,<3
 confluent-kafka==2.15.0
 requests==2.32.3
 scipy>=1.11,<2

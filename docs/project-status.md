@@ -29,7 +29,7 @@ React dashboard ──POST /api/pipeline/run──▶ FastAPI ──REST──�
 
 Pipeline stages (each a `scripts/` wrapper run as an Airflow task): `preflight →
 druid_resume → poll → ingest → indicators → score → serve → wait_for_druid →
-druid_wait → druid_suspend → collect_metrics`.
+druid_wait → druid_suspend → collect_metrics → paper_tracking`.
 
 ---
 
@@ -49,11 +49,12 @@ druid_wait → druid_suspend → collect_metrics`.
   long/short backtest (10 bps/side), deflated Sharpe, feature importances.
 - Druid serving via on-demand supervisors (suspended at rest), incremental
   `price_history` publishing.
-- FastAPI backend + React dashboard (6 pages: Dashboard, Top Picks, Screener,
-  Stock Detail, Model, Ops), manual refresh only.
+- FastAPI backend + React dashboard (9 pages: Dashboard, Top Picks, Screener,
+  Stock Detail, Model, Ops, plus Track Record, Trade Planner and Forecast Lab added later), manual refresh only.
 - On-demand pipeline with failure propagation (a failed stage fails the task).
 - Observability (`monitoring/collect_metrics.py`, `GET/POST /api/ops`, Ops page)
-  and data-quality checks (`monitoring/data_quality.py`).
+  and data-quality checks (`monitoring/data_quality.py`, run after each pipeline run by
+  `scripts/collect_metrics.sh` as an advisory step).
 - Experiments suite under `benchmarks/` (throughput, latency, model, recovery,
   Iceberg, scalability) — each writes a JSON + markdown summary.
 - Reproducible experiment registry under `ml/experiments/`.
@@ -234,7 +235,7 @@ topic to an existing install.
 
 **Daily bars stay current (2026-10-28).** Runs previously never added daily bars,
 so every run re-scored the date of the last backfill (2026-10-01). Each run now
-fetches the bars since 10 days before the latest scored date (`scripts/poll.sh` →
+fetches the bars since `DAILY_BARS_LOOKBACK_DAYS` (5) days before the latest scored date (`scripts/poll.sh` →
 `backfill.py --start`) and ingests them with `quotes-daily-job`; the indicator job
 keeps the most recently ingested row per `(symbol, trade_date)`, so a partial
 intraday bar is replaced by the final close on the next run. Verified with a Full

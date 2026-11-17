@@ -49,7 +49,7 @@ used and Kafka round-robins across partitions.
   valid snapshot is durably persisted to Iceberg bronze within seconds by the SeaTunnel/Spark
   pipeline. 1 day of Kafka retention is enough to allow reprocessing after a same-day bug fix or
   brief consumer outage, without Kafka's own disk usage growing unbounded (500 symbols x
-  ~1 snapshot/5min x 1 day is a small, bounded footprint).
+  one snapshot per on-demand run is a small, bounded footprint).
 - **`market.fundamentals` / `market.scores`: 7 days.** Lower volume, and a longer window is useful
   while actively developing/debugging the pipeline (can replay a week of runs without needing to
   fall back to Iceberg).

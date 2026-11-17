@@ -20,8 +20,9 @@ publication and then its fixed21-session evaluation. One provider quote error
 (EMBASSY.NS) remains visible. Existing predictions, feature snapshots, weights and
 trading rules retain their original hashes.
 
-Future pipeline runs invoke the independent outcome observer before new model
-scoring. It can also be run with `bash scripts/paper_outcomes.sh`. This remains an
+Each pipeline run invokes the independent outcome observer in its own
+`paper_tracking` step, after the production snapshot has been served (it is a
+no-op unless a frozen paper candidate exists, and never fails the run). It can also be run with `bash scripts/paper_outcomes.sh`. This remains an
 on-demand application; no background scheduler or deployment was created.
 
 See [the financial pilot](financial-pilot.md) for the before/after audit, original
