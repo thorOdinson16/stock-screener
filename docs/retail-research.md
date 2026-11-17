@@ -155,6 +155,6 @@ The next data-dependent work is verified entitlement valuation, an unadjusted
 execution-price/total-return benchmark source, historical universe membership,
 and genuine point-in-time quarterly statements. These cannot be inferred from
 the current annual Yahoo snapshots. A historical calibration exercise and guarded
-Forecast Lab are now implemented; both tested probability models failed the
+the research page (`/research`) are now implemented; both tested probability models failed the
 baseline checks. Live estimates remain withheld. See
 [forecast-calibration.md](forecast-calibration.md) for results and reproduction.

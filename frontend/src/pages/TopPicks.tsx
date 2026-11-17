@@ -5,10 +5,10 @@ import type { PicksResponse } from "../types";
 import { changeClass, fmtNum, fmtPct } from "../format";
 import { Card, QueryView, Updated } from "../components/ui";
 
-type Horizon = "fwd_ret_5d" | "fwd_ret_21d";
+type Horizon = "5d" | "21d";
 
 export default function TopPicks() {
-  const [label, setLabel] = useState<Horizon>("fwd_ret_21d");
+  const [label, setLabel] = useState<Horizon>("21d");
   const picks = useApi<PicksResponse>(["picks", label], `/picks?label=${label}&k=20`);
   const navigate = useNavigate();
 
@@ -24,10 +24,10 @@ export default function TopPicks() {
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <div className="seg">
-            <button className={label === "fwd_ret_5d" ? "active" : ""} onClick={() => setLabel("fwd_ret_5d")}>
+            <button className={label === "5d" ? "active" : ""} onClick={() => setLabel("5d")}>
               5-day
             </button>
-            <button className={label === "fwd_ret_21d" ? "active" : ""} onClick={() => setLabel("fwd_ret_21d")}>
+            <button className={label === "21d" ? "active" : ""} onClick={() => setLabel("21d")}>
               21-day
             </button>
           </div>
@@ -36,7 +36,7 @@ export default function TopPicks() {
       </div>
 
       <Card
-        title={`Top ${picks.data?.count ?? 20} picks — ${label === "fwd_ret_5d" ? "5-day" : "21-day"} horizon`}
+        title={`Top ${picks.data?.count ?? 20} picks — ${label === "5d" ? "5-day" : "21-day"} horizon`}
         subtitle="Click a row for full detail"
       >
         <QueryView query={picks}>

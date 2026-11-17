@@ -104,7 +104,7 @@ in `ml/evaluation/results/baseline_comparison_20261108/`: `config.json`, detaile
 records source hashes, prediction hashes, price snapshot, event digest, universe
 metadata, boundaries and policy. A directory with a different protocol is refused.
 
-`GET /api/research/baselines` serves the report in Forecast Lab. Changes to the
+`GET /api/research/baselines` serves the report on the research page (`/research`). Changes to the
 algorithm, prediction evidence, research configuration, universe or event ledger
 mark it stale. This endpoint reads local historical evidence and does not query
 the current market or alter the production model.

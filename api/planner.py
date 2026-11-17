@@ -105,15 +105,10 @@ def trade_plan(request: PlanRequest):
         if served and served.get("industry"):
             holding["industry"] = served["industry"]
     try:
-        result = plan(rows, policy, asof, holdings)
-        from api.forecasts import card_for_row
-        from ml.evaluation.calibration import read_artifact
-        artifact = read_artifact()
-        size = sum(r.get("rank") is not None and r.get("rank", 0) > 0 for r in rows)
-        by_symbol = {r["symbol"]: r for r in rows}
-        for candidate in result["candidates"]:
-            candidate["forecast"] = card_for_row(artifact, by_symbol[candidate["symbol"]], policy.horizon, size, policy)
-        return result
+        # Per-stock forecast cards used to be attached here. The dashboard no longer
+        # shows them (calibrated probabilities are withheld); they remain available
+        # per symbol at GET /api/forecasts/{symbol}.
+        return plan(rows, policy, asof, holdings)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

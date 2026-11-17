@@ -168,7 +168,7 @@ The application remains on demand: no new cron job, background collector or
 external deployment was created. Use future pipeline/paper runs to continue.
 
 Artifacts live under `ml/evaluation/results/information_archive/` and
-`information_research_20261109/`. Forecast Lab has an information-research card;
+`information_research_20261109/`. the research page (`/research`) has an information-research card;
 `GET /api/research/information` serves source-checked historical results and fresh
 coverage without importing training libraries into the API. Changed source,
 filing, model or historical input evidence marks the card stale.

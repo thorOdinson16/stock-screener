@@ -192,7 +192,7 @@ The paper update needs HDFS for the frozen current-model control's legacy
 financial inputs. Historical reports and the API do not require running Hadoop.
 Source/index/document/model changes are checked and exposed as stale evidence.
 
-`GET /api/research/completion` supplies Forecast Lab with the step status,
+`GET /api/research/completion` supplies the research page (`/research`) with the step status,
 calibration, financial coverage, robustness, actual cohort states and explicit
 remaining market time. Full protocol, source audits, predictions, simulations,
 calibrators, frozen weights and immutable paper records stay in local artifacts.

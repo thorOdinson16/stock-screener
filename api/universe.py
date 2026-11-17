@@ -35,6 +35,11 @@ def metadata_for(symbol: str) -> dict:
     return _load().get(symbol, {"company_name": symbol, "industry": "Unknown"})
 
 
+def symbols() -> set[str]:
+    """yfinance symbols of the current constituents (empty if the cache is unreadable)."""
+    return set(_load())
+
+
 def industries() -> list[str]:
     return sorted({m["industry"] for m in _load().values()})
 

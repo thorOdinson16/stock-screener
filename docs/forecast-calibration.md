@@ -1,6 +1,6 @@
-# Forecast Lab
+# Forecast calibration (research page)
 
-Forecast Lab adds historical probability and return-band diagnostics, a guarded
+The research page (`/research`) adds historical probability and return-band diagnostics, a guarded
 forecast API, and explicit corporate-action entitlement accounting. It does not
 promote a model or enable unsupported live probabilities. Existing production
 rankings remain unchanged.
@@ -88,7 +88,7 @@ hashes protect reproducibility. Changed source evidence requires a new audit.
 serves a guarded card. Research status, stale evidence, model lineage, unsupported
 policy, ineligibility or missing context withhold numeric live forecasts. Profit
 probability, outperformance probability and bands have separate evidence gates.
-The dashboard exposes these reasons in Forecast Lab and Trade Planner.
+The dashboard exposes these reasons on the research page.
 
 Tests cover chronology, scheduled-maturity purging, costs and gap stops,
 unlisted entitlements, reconciliation, calibration against a baseline, and API

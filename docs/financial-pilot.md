@@ -164,7 +164,7 @@ responses/documents, observation versions, `collection.json`,
 `pilot_features.parquet`, `daily_coverage.csv`, `coverage_report.json`,
 `coverage_summary.md` and `review_queue.json`. Large runtime data stays ignored
 by Git; the versioned pilot definition, collectors, tests and documentation are
-kept as repository source. Forecast Lab displays readiness and per-stock coverage
+kept as repository source. The research page (`/research`) displays readiness and per-stock coverage
 through `GET /api/research/financial-pilot` without loading ML libraries in the API.
 
 Existing frozen paper cohorts can now be valued independently of new scoring:

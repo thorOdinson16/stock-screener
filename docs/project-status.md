@@ -50,7 +50,7 @@ druid_wait → druid_suspend → collect_metrics → paper_tracking`.
 - Druid serving via on-demand supervisors (suspended at rest), incremental
   `price_history` publishing.
 - FastAPI backend + React dashboard (9 pages: Dashboard, Top Picks, Screener,
-  Stock Detail, Model, Ops, plus Track Record, Trade Planner and Forecast Lab added later), manual refresh only.
+  Stock Detail, Model, Ops, plus Track Record, Trade Planner and Forecast Lab added later; Forecast Lab now lives on the unlinked `/research` page), manual refresh only.
 - On-demand pipeline with failure propagation (a failed stage fails the task).
 - Observability (`monitoring/collect_metrics.py`, `GET/POST /api/ops`, Ops page)
   and data-quality checks (`monitoring/data_quality.py`, run after each pipeline run by

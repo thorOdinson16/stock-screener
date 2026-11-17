@@ -22,7 +22,7 @@ interface Filters {
 }
 
 const DEFAULTS: Filters = {
-  label: "fwd_ret_21d",
+  label: "21d",
   industries: [],
   minScore: "",
   minPe: "",
@@ -115,8 +115,8 @@ export default function Screener() {
           <div className="field">
             <label>Horizon</label>
             <select value={filters.label} onChange={(e) => set({ label: e.target.value })}>
-              <option value="fwd_ret_21d">21-day</option>
-              <option value="fwd_ret_5d">5-day</option>
+              <option value="21d">21-day</option>
+              <option value="5d">5-day</option>
             </select>
           </div>
           <div className="field">

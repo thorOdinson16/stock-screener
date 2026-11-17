@@ -48,6 +48,18 @@ class CoreApiTests(unittest.TestCase):
         self.assertIn("pe_ratio >= 10.0", sql)
         self.assertIn("rsi_14 >= 40.5", sql)
 
+    def test_listing_hides_symbols_outside_the_current_universe(self):
+        import api.main as main
+        rows = [{"symbol": "TCS.NS"}, {"symbol": "ICICIPRULI.NS"}]
+        with patch("api.main.query", return_value=list(rows)), \
+             patch("api.main.universe.symbols", return_value={"TCS.NS"}):
+            self.assertEqual(main._latest_screener(["symbol"]), [{"symbol": "TCS.NS"}])
+            self.assertEqual(len(main._latest_screener(["symbol"], current_only=False)), 2)
+        # An unreadable universe cache must not blank the screener.
+        with patch("api.main.query", return_value=list(rows)), \
+             patch("api.main.universe.symbols", return_value=set()):
+            self.assertEqual(len(main._latest_screener(["symbol"])), 2)
+
     def test_history_accepts_the_ranges_the_dashboard_sends(self):
         today = datetime.now(timezone.utc).date()
         for label, days in (("3mo", 90), ("6mo", 180), ("1y", 365), ("2y", 730)):

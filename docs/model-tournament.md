@@ -195,7 +195,7 @@ Or pass an already exported input directory. The initial source ends on
 2026-10-26, so it cannot start a fresh cohort on 2026-11-08. No historical cohort
 is fabricated to fill that gap.
 
-`GET /api/research/tournament` serves the compact report in Forecast Lab. Source,
+`GET /api/research/tournament` serves the compact report on the research page (`/research`). Source,
 reference and manifest changes mark evidence stale. API report reads require no
 training-library dependencies. Full curves, trades and per-cycle records remain
 in the detailed artifacts.

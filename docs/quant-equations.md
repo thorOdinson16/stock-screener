@@ -91,7 +91,7 @@ tournament and output directory. Completed runs are read-only.
 Artifacts live in `ml/evaluation/results/quant_equations_20261109/`: protocol,
 validation-only selection, later signal files, detailed simulations, robustness
 diagnostics, `report.json` and `summary.md`. Source/data changes mark dashboard
-evidence stale. Forecast Lab reads `GET /api/research/equations`.
+evidence stale. The research page (`/research`) reads `GET /api/research/equations`.
 
 Tests check the exact skipped-month identity, the residual equation against an
 explicit trailing OLS calculation, causal windows, missing-data/zero-risk behavior,

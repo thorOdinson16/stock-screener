@@ -49,6 +49,8 @@ SCREENER_COLUMNS = [
     "sma_50", "sma_200", "score_5d", "rank_5d", "score_21d", "rank_21d",
 ]
 
+# The score is a relative ranking of EXCESS return (a rank blend), not a return forecast;
+# "5d"/"21d" are the canonical names. The old fwd_ret_* names are still accepted.
 LABELS = {
     "fwd_ret_5d": ("score_5d", "rank_5d"),
     "5d": ("score_5d", "rank_5d"),
@@ -86,10 +88,22 @@ def _qcols(columns: list[str]) -> str:
     return ", ".join("*" if c == "*" else f'"{c}"' for c in columns)
 
 
-def _latest_screener(columns: list[str], extra_where: list[str] | None = None) -> list[dict]:
+def _latest_screener(columns: list[str], extra_where: list[str] | None = None,
+                     current_only: bool = True) -> list[dict]:
+    """Rows of the latest served snapshot.
+
+    The published snapshot contains every symbol ever ingested, so a renamed or
+    removed constituent (e.g. ICICIPRULI.NS after its rename) would stay listed
+    with stale prices and no score. By default only current index members are
+    returned; if the universe cache cannot be read nothing is filtered.
+    """
     where = [f"__time = {LATEST_SNAPSHOT}"] + (extra_where or [])
     sql = f"SELECT {_qcols(columns)} FROM screener WHERE {' AND '.join(where)}"
-    return query(sql)
+    rows = query(sql)
+    members = universe.symbols() if current_only else set()
+    if members:
+        rows = [r for r in rows if r.get("symbol") in members]
+    return rows
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -159,7 +173,7 @@ def market_overview():
 
 
 @app.get("/api/picks")
-def picks(label: str = Query("fwd_ret_21d"), k: int = Query(20, ge=1, le=100)):
+def picks(label: str = Query("21d"), k: int = Query(20, ge=1, le=100)):
     if label not in LABELS:
         raise HTTPException(status_code=400, detail=f"label must be one of {sorted(set(LABELS))}")
     score_col, rank_col = LABELS[label]
@@ -170,7 +184,7 @@ def picks(label: str = Query("fwd_ret_21d"), k: int = Query(20, ge=1, le=100)):
     )
     rows.sort(key=lambda r: r[rank_col] if r[rank_col] is not None else 1e9)
     for r in rows:
-        r["label"] = "fwd_ret_5d" if score_col == "score_5d" else "fwd_ret_21d"
+        r["label"] = "excess_rank_5d" if score_col == "score_5d" else "excess_rank_21d"
         r["score"] = r.pop(score_col)
         r["rank"] = r.pop(rank_col)
     return {"label": rows[0]["label"] if rows else label, "k": k, "count": len(rows), "picks": rows}
@@ -181,7 +195,7 @@ def screener(
     industry: list[str] | None = Query(None),
     min_score: float | None = Query(None, allow_inf_nan=False),
     max_score: float | None = Query(None, allow_inf_nan=False),
-    label: str = Query("fwd_ret_21d"),
+    label: str = Query("21d"),
     min_pe: float | None = Query(None, allow_inf_nan=False),
     max_pe: float | None = Query(None, allow_inf_nan=False),
     min_rsi: float | None = Query(None, allow_inf_nan=False),
@@ -251,7 +265,8 @@ def screener(
 @app.get("/api/stocks/{symbol}")
 def stock_detail(symbol: str):
     sym = _normalize_symbol(symbol)
-    rows = _latest_screener(["*"], extra_where=[f"symbol = {quote(sym)}"])
+    # A delisted symbol can still be looked up directly, just not listed.
+    rows = _latest_screener(["*"], extra_where=[f"symbol = {quote(sym)}"], current_only=False)
     if not rows:
         raise HTTPException(status_code=404, detail=f"No snapshot for symbol {sym}")
     row = rows[0]
