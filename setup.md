@@ -199,9 +199,7 @@ publish just the index instead of re-sending the whole universe:
 
 ```bash
 cd poller && source .venv/bin/activate
-$KAFKA_HOME/bin/kafka-topics.sh --delete --topic market.quotes.daily --bootstrap-server localhost:9092
-sleep 5 && ./kafka/topics/create-topics.sh
-python backfill.py --once --index-only --period 5y
+python backfill.py --once --index-only --period 5y   # republishes only ^NSEI; the daily-bar job dedupes on ingest
 ```
 
 ## 1.7 Ingest to Iceberg bronze (SeaTunnel)
@@ -271,6 +269,9 @@ record under `ml/experiments/`.
 - Dashboard — http://localhost:5173
 - API docs — http://localhost:8000/docs
 
+Both bind to `127.0.0.1` (the API has no authentication and can start long runs).
+To reach them from another machine: `UI_BIND=0.0.0.0 ./start-ui.sh`.
+
 Stop with `./stop-ui.sh`. To avoid the launcher holding your terminal, run it
 detached: `setsid ./start-ui.sh >/tmp/ui.log 2>&1 < /dev/null &`.
 
@@ -332,8 +333,8 @@ Stages (each a `scripts/` wrapper run as an Airflow task):
 
 1. `preflight` — services up and a model is selected
 2. `druid_resume` — resume the suspended Druid supervisors
-3. `poll` — fetch quotes and the daily bars since the last scored date (from 10
-   days before it, `DAILY_BARS_LOOKBACK_DAYS`); Full runs also fetch fundamentals
+3. `poll` — fetch quotes and the daily bars since the last scored date (from `DAILY_BARS_LOOKBACK_DAYS`, default 5,
+   days before it); Full runs also fetch fundamentals
    and annual statements
 4. `ingest` — SeaTunnel drains Kafka into Iceberg bronze
 5. `indicators` — Spark computes indicators into silver
@@ -341,7 +342,9 @@ Stages (each a `scripts/` wrapper run as an Airflow task):
 7. `serve` — publish the snapshot (history is published incrementally)
 8. `wait_for_druid` — block until Druid serves the fresh snapshot
 9. `druid_wait` / `druid_suspend` — drain, then suspend the supervisors
-10. `collect_metrics` — snapshot operational metrics
+10. `collect_metrics` — snapshot operational metrics, then advisory data-quality checks
+11. `paper_tracking` — update the frozen-candidate paper trial (no-op unless one exists;
+    never fails the run)
 
 ## 2.3 Retrain the model
 
@@ -489,16 +492,28 @@ schema-evolution example queries.
 ## Unit tests
 
 ```bash
-python tests/test_indicators.py
-python tests/test_features.py
-python tests/test_benchmarks.py
-python tests/test_monitoring.py
-python tests/test_data_quality.py
-python tests/test_supervisors.py
+pip install -r requirements-dev.txt
+make test        # python -m pytest -q   (CI runs the same)
+make ci          # + static checks and the frontend typecheck/build
 
 # End-to-end smoke test (opt-in; requires the stack + UI up)
 RUN_E2E=1 python tests/test_pipeline_e2e.py --limit 10
 ```
+
+See `tests/README.md` for the opt-in Spark integration tests.
+
+## Research environment (optional)
+
+The research scripts under `scripts/` (tournament, information trial, pilots, ...)
+run in an isolated virtualenv that the production pipeline never uses:
+
+```bash
+python3 -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt
+# optional extensions: ml/requirements-xgb.txt, ml/requirements-sequence.txt (CPU torch)
+```
+
+The financial-pilot reconciliation also shells out to `pdftotext`
+(`sudo apt install poppler-utils`; already in the Docker image).
 
 ## Full reset (destructive)
 
@@ -508,7 +523,7 @@ jobs first (`for p in $(pgrep -f "SeaTunnel[C]lient"); do kill "$p"; done`).
 
 ```bash
 # 1. delete and recreate Kafka topics, and reset the SeaTunnel consumer groups
-for t in market.quotes market.quotes.daily market.fundamentals market.scores market.screener market.history market.deadletter; do
+for t in market.quotes market.quotes.daily market.fundamentals market.financials market.scores market.screener market.history market.deadletter; do
   $KAFKA_HOME/bin/kafka-topics.sh --delete --topic "$t" --bootstrap-server localhost:9092
 done
 sleep 5
@@ -516,14 +531,14 @@ sleep 5
 
 # group_offsets means SeaTunnel resumes from committed offsets; clear them so a
 # fresh topic is re-read from the start.
-for g in seatunnel-bronze-quotes seatunnel-bronze-quotes-daily seatunnel-bronze-fundamentals; do
+for g in seatunnel-bronze-quotes seatunnel-bronze-quotes-daily seatunnel-bronze-fundamentals seatunnel-bronze-financials; do
   $KAFKA_HOME/bin/kafka-consumer-groups.sh --delete --group "$g" --bootstrap-server localhost:9092
 done
 
 # 2. drop Iceberg tables and remove their warehouse data
-spark-sql "${SPARK_ICEBERG[@]}" -e "DROP TABLE IF EXISTS bronze.market_quotes; DROP TABLE IF EXISTS bronze.quotes_daily; DROP TABLE IF EXISTS bronze.market_fundamentals; DROP TABLE IF EXISTS silver.quotes_enriched; DROP TABLE IF EXISTS silver.fundamentals_clean; DROP TABLE IF EXISTS ml.training_dataset; DROP TABLE IF EXISTS gold.stock_scores; DROP TABLE IF EXISTS gold.top_picks;"
+spark-sql "${SPARK_ICEBERG[@]}" -e "DROP TABLE IF EXISTS bronze.market_quotes; DROP TABLE IF EXISTS bronze.quotes_daily; DROP TABLE IF EXISTS bronze.market_fundamentals; DROP TABLE IF EXISTS bronze.financial_statements; DROP TABLE IF EXISTS silver.quotes_enriched; DROP TABLE IF EXISTS silver.fundamentals_clean; DROP TABLE IF EXISTS silver.financial_statements; DROP TABLE IF EXISTS ml.training_dataset; DROP TABLE IF EXISTS gold.stock_scores; DROP TABLE IF EXISTS gold.top_picks;"
 
-hdfs dfs -rm -r -f /warehouse/bronze/market_quotes /warehouse/bronze/quotes_daily /warehouse/bronze/market_fundamentals /warehouse/silver /warehouse/ml /warehouse/gold
+hdfs dfs -rm -r -f /warehouse/bronze/market_quotes /warehouse/bronze/quotes_daily /warehouse/bronze/market_fundamentals /warehouse/bronze/financial_statements /warehouse/silver /warehouse/ml /warehouse/gold
 
 # 3. recreate the Iceberg tables
 spark-sql "${SPARK_ICEBERG[@]}" -f iceberg/schemas/bronze-schema.sql

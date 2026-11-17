@@ -72,7 +72,7 @@ def parse_hdfs_report(text: str) -> dict:
 
 
 def collect_kafka(env) -> dict:
-    kafka_home = env.get("KAFKA_HOME", "/home/abhi/kafka")
+    kafka_home = env.get("KAFKA_HOME", os.path.expanduser("~/kafka"))
     cmd = [
         os.path.join(kafka_home, "bin", "kafka-consumer-groups.sh"),
         "--bootstrap-server", env.get("KAFKA_BOOTSTRAP", "localhost:9092"),
@@ -100,7 +100,6 @@ def collect_druid(env) -> dict:
     result = {}
     started = time.perf_counter()
     try:
-        result["query_latency_ms"] = round((time.perf_counter() - started) * 1000, 2)
         result["segments"] = {
             row["datasource"]: row["segments"]
             for row in druid_sql(
@@ -118,7 +117,7 @@ def collect_druid(env) -> dict:
 
 
 def collect_hdfs(env) -> dict:
-    hadoop_home = env.get("HADOOP_HOME", "/home/abhi/hadoop")
+    hadoop_home = env.get("HADOOP_HOME", os.path.expanduser("~/hadoop"))
     try:
         out = subprocess.run(
             [os.path.join(hadoop_home, "bin", "hdfs"), "dfsadmin", "-report"],

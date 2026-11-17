@@ -58,8 +58,14 @@ class TournamentForwardTests(unittest.TestCase):
             path = Path(directory)
             (path / "paper_candidate.json").write_text("{}")
             (path / "report.json").write_text("{}")
+            # tournament_paper.sh first runs paper_outcomes.sh, which by default
+            # fetches Yahoo prices and writes into the REAL frozen information
+            # trial. Point it at an empty directory so the test is hermetic.
+            env = {**os.environ, "TOURNAMENT_DIR": str(path),
+                   "INFORMATION_RESEARCH": str(path / "no-information-trial"),
+                   "PAPER_OBSERVATION_SEED": str(path / "no-seed")}
             result = subprocess.run(["bash", "scripts/tournament_paper.sh", str(path / "missing-input")],
-                                    cwd=root, env={**os.environ, "TOURNAMENT_DIR": str(path)}, capture_output=True, text=True)
+                                    cwd=root, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             state = json.loads((path / "paper/status.json").read_text())
             self.assertEqual(state["status"], "error")

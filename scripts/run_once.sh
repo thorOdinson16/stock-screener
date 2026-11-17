@@ -38,5 +38,6 @@ done
 "$SCRIPTS_DIR/wait_druid.sh" "${WAIT_DRUID_TIMEOUT:-240}"
 "$SCRIPTS_DIR/druid_supervisors.sh" wait
 "$SCRIPTS_DIR/druid_supervisors.sh" suspend
+"$SCRIPTS_DIR/paper_tracking.sh"
 
 ok "Pipeline run complete"

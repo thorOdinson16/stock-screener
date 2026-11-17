@@ -45,7 +45,7 @@ from transform import (  # noqa: E402
     transform_group,
 )
 from walk_forward import expanding_folds, purged_kfold_folds  # noqa: E402
-from backtest import backtest  # noqa: E402
+from backtest import backtest, _turnover  # noqa: E402
 from asof import asof_join_fundamentals  # noqa: E402
 from extra_features import (  # noqa: E402
     STATEMENT_LAG_DAYS,
@@ -419,6 +419,27 @@ def test_sector_relative_momentum_demeans_within_industry():
     })
     out = add_relative_features(cs)
     assert np.allclose(out["sector_relative_momentum_3m"], [-0.1, 0.1, -0.1, 0.1])
+
+
+def test_turnover_is_the_fraction_of_the_portfolio_replaced():
+    # Keeping 10 of 20 names replaces half the book. Jaccard distance gave 0.667
+    # and overstated trading cost by a third.
+    previous = {f"S{i}" for i in range(20)}
+    current = {f"S{i}" for i in range(10, 30)}
+    assert abs(_turnover(previous, current) - 0.5) < 1e-12
+    assert _turnover(None, current) == 1.0
+    assert _turnover(previous, previous) == 0.0
+    assert _turnover(previous, set()) == 0.0
+
+
+def test_metrics_turnover_matches_the_backtest_definition():
+    rows = []
+    for date, symbols in ((1, ["A", "B", "C", "D"]), (2, ["A", "B", "E", "F"])):
+        for rank, symbol in enumerate(symbols):
+            rows.append({"trade_date": date, "symbol": symbol, "score": 10 - rank})
+    df = pd.DataFrame(rows)
+    # top-4 changes from {A,B,C,D} to {A,B,E,F}: half replaced
+    assert abs(turnover(df, "score", k=4) - 0.5) < 1e-12
 
 
 def _run_all():

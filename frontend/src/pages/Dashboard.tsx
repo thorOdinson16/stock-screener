@@ -76,7 +76,7 @@ export default function Dashboard() {
           return (
             <div className="grid" style={{ gap: 16 }}>
               <div className="grid cols-4">
-                <StatCard label="Universe" value={fmtNum(d.universe_size, 0)} sub="symbols scored" />
+                <StatCard label="Universe" value={fmtNum(d.universe_size, 0)} sub="symbols in the latest snapshot" />
                 <StatCard label="Advancers" value={fmtNum(d.advancers, 0)} tone="pos" sub={`${((d.advancers / total) * 100).toFixed(0)}% of universe`} />
                 <StatCard label="Decliners" value={fmtNum(d.decliners, 0)} tone="neg" sub={`${((d.decliners / total) * 100).toFixed(0)}% of universe`} />
                 <StatCard label="Avg change" value={fmtPct(d.avg_change_percent)} tone={changeClass(d.avg_change_percent)} sub="daily, equal-weight" />

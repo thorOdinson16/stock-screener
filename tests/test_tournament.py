@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _optional import requires
 from ml.evaluation.tournament_models import training_rows, rank_labels, fit_model, predict, sequences, make_tcn, SequenceModel
 from ml.evaluation.model_tournament import choose_paper_candidate, signals_for
 
@@ -27,6 +28,7 @@ class TournamentTests(unittest.TestCase):
         self.assertEqual(y[0], y[1])
         self.assertGreater(y[2], y[0])
 
+    @requires("sklearn", "lightgbm", "catboost")
     def test_real_model_apis_accept_grouped_dates_and_produce_finite_scores(self):
         frame = pd.DataFrame([{"symbol": str(i), "trade_date": f"2025-01-{d:02}",
                                "x": i / 20, "net_return": i / 100} for d in range(1, 21) for i in range(20)])
@@ -46,6 +48,7 @@ class TournamentTests(unittest.TestCase):
         self.assertEqual(valid.tolist(), [False, False, True, False, False])
         np.testing.assert_array_equal(tensor[2, 0], [0, 1, 2])
 
+    @requires("torch")
     def test_causal_convolution_does_not_use_future_positions(self):
         import torch
         torch.manual_seed(42)
@@ -55,6 +58,7 @@ class TournamentTests(unittest.TestCase):
         changed[:, :, 10:] = 1000
         torch.testing.assert_close(layer(original)[:, :, :10], layer(changed)[:, :, :10])
 
+    @requires("torch")
     def test_sequence_scaling_is_train_only_and_frozen_weights_reload(self):
         import torch
         values = np.random.default_rng(42).normal(size=(40, 2, 20)).astype(np.float32)

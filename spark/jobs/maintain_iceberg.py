@@ -28,14 +28,21 @@ DEFAULT_TABLES = [
     "iceberg.bronze.market_quotes",
     "iceberg.bronze.quotes_daily",
     "iceberg.bronze.market_fundamentals",
+    "iceberg.bronze.financial_statements",
     "iceberg.silver.quotes_enriched",
     "iceberg.silver.fundamentals_clean",
+    "iceberg.silver.financial_statements",
     "iceberg.gold.stock_scores",
     "iceberg.gold.top_picks",
     "iceberg.ml.training_dataset",
 ]
 
 CATALOG_PREFIX = "iceberg."
+
+# evaluate.py records the training dataset's snapshot id so a run can be
+# reproduced by time travel; expiring it after the default 7 days would make that
+# record useless, so it keeps its snapshots longer.
+LONG_RETENTION_TABLES = {"iceberg.ml.training_dataset"}
 
 
 def meta_name(table: str) -> str:
@@ -72,7 +79,7 @@ def one_line(stats: dict) -> str:
     return f"{stats['snapshots']} snapshots, {stats['files']} files, {stats['mb']:.1f} MB"
 
 
-def maintain(spark: SparkSession, table: str, snapshot_ts_ms: int) -> None:
+def maintain(spark: SparkSession, table: str, snapshot_ts_ms: int, long_ts_ms: int) -> None:
     try:
         before = table_stats(spark, table)
     except Exception as e:  # noqa: BLE001 — a missing table must not abort the rest
@@ -93,7 +100,8 @@ def maintain(spark: SparkSession, table: str, snapshot_ts_ms: int) -> None:
     jtable = spark._jvm.org.apache.iceberg.spark.Spark3Util.loadIcebergTable(
         spark._jsparkSession, table
     )
-    jtable.expireSnapshots().expireOlderThan(snapshot_ts_ms).commit()
+    cutoff = long_ts_ms if table in LONG_RETENTION_TABLES else snapshot_ts_ms
+    jtable.expireSnapshots().expireOlderThan(cutoff).commit()
 
     after = table_stats(spark, table)
     expired = before["snapshots"] - after["snapshots"]
@@ -104,6 +112,10 @@ def main():
     parser = argparse.ArgumentParser(description="Iceberg maintenance")
     parser.add_argument("--warehouse", default="hdfs://localhost:9000/warehouse")
     parser.add_argument("--snapshot-retention-days", type=int, default=7)
+    parser.add_argument(
+        "--training-retention-days", type=int, default=90,
+        help="Snapshot retention for ml.training_dataset (experiment reproducibility)",
+    )
     parser.add_argument("--tables", default=",".join(DEFAULT_TABLES))
     parser.add_argument("--dry-run", action="store_true", help="Print current stats only")
     args = parser.parse_args()
@@ -115,6 +127,8 @@ def main():
     now = datetime.now(timezone.utc)
     snapshot_cutoff = now - timedelta(days=args.snapshot_retention_days)
     snapshot_ts_ms = int(snapshot_cutoff.timestamp() * 1000)
+    long_cutoff = now - timedelta(days=max(args.training_retention_days, args.snapshot_retention_days))
+    long_ts_ms = int(long_cutoff.timestamp() * 1000)
 
     if args.dry_run:
         print(f"DRY RUN (expire snapshots < {snapshot_cutoff.isoformat()})")
@@ -128,7 +142,7 @@ def main():
 
     print(f"Maintenance: expire snapshots < {snapshot_cutoff.isoformat()}")
     for table in tables:
-        maintain(spark, table, snapshot_ts_ms)
+        maintain(spark, table, snapshot_ts_ms, long_ts_ms)
 
     print("Maintenance complete.")
     spark.stop()

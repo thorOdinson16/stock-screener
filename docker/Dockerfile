@@ -58,7 +58,7 @@ RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80retries \
         openjdk-11-jdk-headless openjdk-17-jre-headless \
         python3 python3-venv python3-pip \
         software-properties-common gpg-agent \
-        perl curl ca-certificates procps iproute2 tini \
+        perl curl ca-certificates procps iproute2 tini poppler-utils \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends python3.10 python3.10-venv \
     && apt-get purge -y software-properties-common gpg-agent && apt-get autoremove -y \

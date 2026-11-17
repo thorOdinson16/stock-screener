@@ -1,5 +1,6 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import ErrorBoundary from "./ErrorBoundary";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: "▦" },
@@ -14,6 +15,7 @@ const NAV = [
 
 export default function Layout() {
   const queryClient = useQueryClient();
+  const location = useLocation();
 
   return (
     <div className="app">
@@ -46,7 +48,9 @@ export default function Layout() {
         </div>
       </aside>
       <main className="content">
-        <Outlet />
+        <ErrorBoundary key={location.pathname} label="This page">
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

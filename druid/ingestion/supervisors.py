@@ -71,17 +71,23 @@ def supervisor_status(supervisor_id: str, router: str):
     return None
 
 
-def _action(supervisor_id: str, verb: str, router: str) -> str:
+def _action(supervisor_id: str, verb: str, router: str):
+    """POST suspend/resume. Returns (ok, message).
+
+    An unreachable Druid or an HTTP error is a failure. 404 only means the
+    supervisor was never registered, which is not an error for a pipeline that
+    has nothing to ingest into it.
+    """
     status, body = _request(
         "POST", f"/druid/indexer/v1/supervisor/{supervisor_id}/{verb}", router
     )
     if status is None:
-        return f"{supervisor_id}: unreachable ({body})"
+        return False, f"{supervisor_id}: unreachable ({body})"
     if status == 404:
-        return f"{supervisor_id}: not registered"
+        return True, f"{supervisor_id}: not registered"
     if status not in (200, 202):
-        return f"{supervisor_id}: {verb} -> HTTP {status} {body}"
-    return f"{supervisor_id}: {verb} ok"
+        return False, f"{supervisor_id}: {verb} -> HTTP {status} {body}"
+    return True, f"{supervisor_id}: {verb} ok"
 
 
 def main():
@@ -102,8 +108,14 @@ def main():
         return 0
 
     if args.action in ("suspend", "resume"):
+        failed = 0
         for supervisor_id in ids:
-            print(_action(supervisor_id, args.action, args.router))
+            ok, message = _action(supervisor_id, args.action, args.router)
+            print(message, file=sys.stdout if ok else sys.stderr)
+            failed += not ok
+        if failed:
+            print(f"{failed}/{len(ids)} supervisors failed to {args.action}.", file=sys.stderr)
+            return 1
         return 0
 
     if args.action == "status":

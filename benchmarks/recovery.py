@@ -58,7 +58,7 @@ def total_lag(text: str):
 
 
 def kafka_lag(env) -> dict:
-    kafka_home = env.get("KAFKA_HOME", "/home/abhi/kafka")
+    kafka_home = env.get("KAFKA_HOME", os.path.expanduser("~/kafka"))
     result = run_cmd([
         os.path.join(kafka_home, "bin", "kafka-consumer-groups.sh"),
         "--bootstrap-server", env.get("KAFKA_BOOTSTRAP", "localhost:9092"),
@@ -113,6 +113,24 @@ def run_with_fault(args, env, log_dir) -> dict:
         run_cmd(["bash", supervisors, "suspend"])
 
 
+def completeness_checks(before: dict, after: dict, deltas: dict) -> dict:
+    """What 'recovered' must also mean: consumers drained and serving data grew.
+
+    The runner previously reported success as soon as a later pipeline run
+    exited 0, without looking at lag or counts (a Kafka-kill run ended with the
+    same 5333 messages of lag it started with and was still 'recovered')."""
+    problems = []
+    lag = after["kafka"].get("lag")
+    if lag:
+        problems.append(f"Kafka consumer lag not drained after recovery ({lag})")
+    for ds in ("screener", "stock_scores"):
+        if deltas.get(ds) is None:
+            problems.append(f"{ds}: row count unavailable")
+        elif deltas[ds] <= 0:
+            problems.append(f"{ds}: no new rows after recovery (delta {deltas[ds]})")
+    return {"kafka_lag_after": lag, "problems": problems}
+
+
 def write_summary() -> None:
     """Rebuilds summary.md from every per-component result file."""
     results = []
@@ -126,8 +144,8 @@ def write_summary() -> None:
         "the recovered run (one successful run of `--limit` symbols is expected to add",
         "one snapshot).", "",
         "| component | killed during | run failed | failed stage | recovered | recovery s | "
-        "Kafka lag before -> after | screener delta | stock_scores delta | market_quotes delta |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "Kafka lag before -> after | screener delta | stock_scores delta | market_quotes delta | data verified |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in results:
         d = r.get("druid_count_delta", {})
@@ -135,7 +153,8 @@ def write_summary() -> None:
             f"| {r['component']} | {r.get('kill_during') or 'before run'} | "
             f"{r['pipeline_failed_while_down']} | {r.get('failed_stage')} | {r['recovered']} | "
             f"{r['recovery_seconds']} | {r['before']['kafka']['lag']} -> {r['after']['kafka']['lag']} | "
-            f"{d.get('screener')} | {d.get('stock_scores')} | {d.get('market_quotes')} |"
+            f"{d.get('screener')} | {d.get('stock_scores')} | {d.get('market_quotes')} | "
+            f"{r.get('data_verified', 'not checked')} |"
         )
     write_text("recovery", "summary.md", "\n".join(lines) + "\n")
 
@@ -191,6 +210,12 @@ def main():
     recovery_seconds = time.perf_counter() - started
 
     after = snapshot(env)
+    deltas = {
+        ds: (None if before["druid"].get(ds) is None or after["druid"].get(ds) is None
+             else after["druid"][ds] - before["druid"][ds])
+        for ds in DATASOURCES
+    }
+    checks = completeness_checks(before, after, deltas)
     payload = {
         "component": args.component,
         "kill_during": args.kill_during,
@@ -199,6 +224,8 @@ def main():
         "failed_stage": fault["failed_stage"],
         "pipeline_failed_while_down": failed,
         "recovered": recovered,
+        "data_verified": recovered and not checks["problems"],
+        "completeness": checks,
         "recovery_seconds": round(recovery_seconds, 1),
         "before": before,
         "after": after,

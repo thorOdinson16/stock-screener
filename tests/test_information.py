@@ -111,7 +111,7 @@ class DocumentTests(unittest.TestCase):
             with self.assertRaises(ValueError):document_facts(record,path,'2025-02-02T10:00:00+05:30')
 
     def test_observation_ledger_cannot_be_overwritten(self):
-        from poller.research_information import exclusive
+        from research_information import exclusive  # poller/ is on sys.path (tests/conftest.py)
         with tempfile.TemporaryDirectory() as d:
             file=Path(d)/'ledger.json'
             exclusive(file,{'first_seen_at':'first'})

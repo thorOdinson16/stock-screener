@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api import druid
 from api.druid import DruidError, LATEST_SNAPSHOT, query, quote
@@ -55,15 +56,26 @@ LABELS = {
     "21d": ("score_21d", "rank_21d"),
 }
 
-RANGES = {"1m": 30, "3m": 90, "6m": 180, "1y": 365, "2y": 730}
+# Both spellings are accepted: the dashboard sends 3mo/6mo, scripts use 3m/6m.
+RANGES = {"1m": 30, "1mo": 30, "3m": 90, "3mo": 90, "6m": 180, "6mo": 180, "1y": 365, "2y": 730}
 
 app = FastAPI(title="Stock Screening API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=os.environ.get(
+        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+    ).split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(DruidError)
+async def druid_unavailable(_request, error: DruidError):
+    """A Druid outage or bad query is a 503 the dashboard can explain, not a stack trace."""
+    return JSONResponse(status_code=503, content={"detail": str(error)})
+
+
 app.include_router(pipeline_router)
 app.include_router(planner_router)
 app.include_router(forecasts_router)
@@ -167,16 +179,16 @@ def picks(label: str = Query("fwd_ret_21d"), k: int = Query(20, ge=1, le=100)):
 @app.get("/api/screener")
 def screener(
     industry: list[str] | None = Query(None),
-    min_score: float | None = Query(None),
-    max_score: float | None = Query(None),
+    min_score: float | None = Query(None, allow_inf_nan=False),
+    max_score: float | None = Query(None, allow_inf_nan=False),
     label: str = Query("fwd_ret_21d"),
-    min_pe: float | None = Query(None),
-    max_pe: float | None = Query(None),
-    min_rsi: float | None = Query(None),
-    max_rsi: float | None = Query(None),
-    min_momentum: float | None = Query(None),
-    max_distance_52w_high: float | None = Query(None),
-    min_volume_ratio: float | None = Query(None),
+    min_pe: float | None = Query(None, allow_inf_nan=False),
+    max_pe: float | None = Query(None, allow_inf_nan=False),
+    min_rsi: float | None = Query(None, allow_inf_nan=False),
+    max_rsi: float | None = Query(None, allow_inf_nan=False),
+    min_momentum: float | None = Query(None, allow_inf_nan=False),
+    max_distance_52w_high: float | None = Query(None, allow_inf_nan=False),
+    min_volume_ratio: float | None = Query(None, allow_inf_nan=False),
     max_pe_only_positive: bool = Query(True),
     sort: str = Query("score"),
     order: str = Query("desc"),

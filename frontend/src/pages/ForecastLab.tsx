@@ -4,6 +4,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 import { apiGet } from "../api";
 import { useApi } from "../hooks";
 import { Card, QueryView, StatCard, ErrorState } from "../components/ui";
+import ErrorBoundary from "../components/ErrorBoundary";
 import { fmtNum } from "../format";
 import CompletionResearch from "./CompletionResearch";
 import QuantEquations from "./QuantEquations";
@@ -35,10 +36,10 @@ export default function ForecastLab() {
     <div className="page-head"><div><h1 className="page-title">Forecast Lab</h1><p className="page-sub">Probability calibration, net-return ranges and entitlement evidence</p></div></div>
     <div className="seg" style={{ marginBottom: 16 }}>{["21", "63"].map(h => <button key={h} className={horizon === h ? "active" : ""} onClick={() => { setHorizon(h); preview.reset(); }}>{h} trading sessions</button>)}</div>
     <div className="grid" style={{ gap: 16 }}>
-      <QuantEquations />
-      <InformationResearch />
-      <FinancialPilot />
-      <CompletionResearch />
+      <ErrorBoundary label="Quant equations"><QuantEquations /></ErrorBoundary>
+      <ErrorBoundary label="Information research"><InformationResearch /></ErrorBoundary>
+      <ErrorBoundary label="Financial pilot"><FinancialPilot /></ErrorBoundary>
+      <ErrorBoundary label="Research plan completion"><CompletionResearch /></ErrorBoundary>
       <QueryView query={tournament}>{r => <Card title="Architecture tournament" subtitle={`21-session historical research · ${r.status.replace(/_/g, " ")}`}>
         <p className="muted">Linear, LightGBM and CatBoost candidates share feature rows and chronological splits. Price-only versus provisional fundamentals, and existing versus execution-aligned targets, are separate arms. The small TCN has a flattened-window LightGBM control using the same historical inputs. Configuration choices and the paper candidate are locked using earlier validation only.</p>
         {r.progress && <p className="muted">{r.progress.stage.replace(/_/g, " ")} · {r.progress.candidate}</p>}

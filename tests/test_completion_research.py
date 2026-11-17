@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _optional import require_module_or_skip
+require_module_or_skip("sklearn", "lightgbm", "catboost")
 from ml.evaluation.research_context import add_context
 from ml.evaluation.completion_models import Learner, fit_sigmoid
 from ml.evaluation.completion_research import add_targets

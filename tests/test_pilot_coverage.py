@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from ml.evaluation.pilot_coverage import choose_pilot,readiness,parse_pilot_record,require_ready
-from poller.pilot_filings import normalize
+from pilot_filings import normalize  # poller/ is on sys.path (tests/conftest.py)
 
 THRESHOLDS={'minimum_signal_dates':2,'required_date_pass_fraction':.95,'minimum_quarter_pass_fraction':.9,
             'latest_date_must_pass':True,'required_quarter_cell_fraction':.95}

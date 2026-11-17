@@ -28,7 +28,7 @@ TOPICS = ["market.quotes", "market.quotes.daily", "market.scores", "market.scree
 
 
 def set_partitions(env, topic, partitions) -> dict:
-    kafka_bin = os.path.join(env.get("KAFKA_HOME", "/home/abhi/kafka"), "bin")
+    kafka_bin = os.path.join(env.get("KAFKA_HOME", os.path.expanduser("~/kafka")), "bin")
     return run_cmd([
         os.path.join(kafka_bin, "kafka-topics.sh"), "--alter",
         "--bootstrap-server", env.get("KAFKA_BOOTSTRAP", "localhost:9092"),

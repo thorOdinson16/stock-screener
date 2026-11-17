@@ -5,6 +5,7 @@ import unittest
 import numpy as np
 import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _optional import requires
 from ml.evaluation.top20_experiment import fine_labels, fit_target, choose_config, economic_score, candidate_gate
 
 
@@ -21,6 +22,7 @@ class LabelTests(unittest.TestCase):
         f = pd.DataFrame({'trade_date': ['a','a','b','b'], 'net_return': [-1,0,100,200]})
         np.testing.assert_equal(fine_labels(f), [0,1,0,1])
 
+    @requires("xgboost")
     def test_real_fits_accept_more_than_31_labels(self):
         x = np.arange(120, dtype=float)
         f = pd.DataFrame({'symbol': list(map(str, range(120))), 'trade_date': np.repeat(['a','b'],60),

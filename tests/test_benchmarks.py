@@ -13,8 +13,8 @@ import sys
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(_ROOT, "benchmarks"))
 
-from common import percentile, stage_seconds  # noqa: E402
-from recovery import total_lag  # noqa: E402
+from common import percentile, stage_duration, stage_seconds  # noqa: E402
+from recovery import completeness_checks, total_lag  # noqa: E402
 
 
 def test_percentile_basic():
@@ -49,6 +49,22 @@ def test_total_lag_parses_consumer_groups():
 def test_total_lag_ignores_header_and_bad_lines():
     text = "GROUP TOPIC PARTITION CURRENT-OFFSET LOG-END-OFFSET LAG\ngarbage line\n"
     assert total_lag(text) == (0, 0)
+
+
+def test_stage_duration_reads_one_stage():
+    result = {"stages": [{"stage": "poll", "seconds": 46.4}, {"stage": "wait_druid", "seconds": 0.1}]}
+    assert stage_duration(result, "wait_druid") == 0.1  # not the poll time
+    assert stage_duration(result, "missing") is None
+
+
+def test_recovery_is_not_verified_when_lag_remains_or_nothing_was_served():
+    before = {"kafka": {"lag": 5333}, "druid": {}}
+    ok = completeness_checks(before, {"kafka": {"lag": 0}}, {"screener": 499, "stock_scores": 980})
+    assert ok["problems"] == []
+    stuck = completeness_checks(before, {"kafka": {"lag": 5333}}, {"screener": 499, "stock_scores": 980})
+    assert any("lag" in p for p in stuck["problems"])
+    empty = completeness_checks(before, {"kafka": {"lag": 0}}, {"screener": 0, "stock_scores": None})
+    assert len(empty["problems"]) == 2
 
 
 def _run_all():

@@ -50,6 +50,9 @@ MODEL_LOADERS = {
 
 ENSEMBLE_NAME = "rank_ensemble"
 
+# Fail the run if fewer than this share of the latest cross-section can be scored.
+MIN_SCORED_FRACTION = 0.5
+
 
 def load_model(meta):
     return MODEL_LOADERS[meta.get("base_algo", "gbt")].load(meta["path"])
@@ -195,6 +198,21 @@ def main():
         .cache()
     )
 
+    # VectorAssembler(handleInvalid="skip") silently drops stocks with a missing
+    # feature (e.g. fewer than ~200 bars of history), so the universe size alone
+    # says nothing about how many were scored. Report it, and refuse to publish a
+    # cross-section that is mostly empty (stale or broken indicators).
+    scored_per_label = {r["label"]: r["count"] for r in scores.groupBy("label").count().collect()}
+    fewest = min(scored_per_label.values()) if scored_per_label else 0
+    dropped = universe_size - fewest
+    print(f"Scored per label: {scored_per_label}; {dropped} of {universe_size} stocks "
+          "had incomplete features and were not ranked.")
+    if universe_size == 0 or fewest < MIN_SCORED_FRACTION * universe_size:
+        raise SystemExit(
+            f"Only {fewest}/{universe_size} stocks could be scored (minimum "
+            f"{MIN_SCORED_FRACTION:.0%}); refusing to publish. Check the indicators step."
+        )
+
     scores = match_not_null(scores, spark, "iceberg.gold.stock_scores")
     scores.createOrReplaceTempView("scores_stage")
     spark.sql(
@@ -220,7 +238,7 @@ def main():
         "FROM top_picks_stage"
     )
 
-    print(f"Scored {universe_size} symbols for {score_date}; wrote gold.stock_scores + gold.top_picks.")
+    print(f"Scored {fewest} of {universe_size} symbols for {score_date}; wrote gold.stock_scores + gold.top_picks.")
 
     if not args.skip_publish:
         try:

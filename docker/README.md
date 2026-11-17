@@ -105,7 +105,7 @@ Then open the dashboard and press **Run pipeline** (Full, with price history).
 |---|---|
 | Dashboard | http://localhost:5173 |
 | API docs | http://localhost:8000/docs |
-| Airflow | http://localhost:8080 (`admin` / `admin`) |
+| Airflow | http://localhost:8080 (`admin` / `admin` — change `AIRFLOW_PASSWORD` before exposing it) |
 | Druid console | http://localhost:8888 |
 | HDFS NameNode | http://localhost:9870 |
 
@@ -129,6 +129,7 @@ Override these in a `.env` file next to `docker-compose.yml`:
 | `SEATUNNEL_HEAP` | `2g` | SeaTunnel Zeta heap |
 | `KAFKA_HEAP` | `1g` | Kafka heap |
 | `AIRFLOW_USER` / `AIRFLOW_PASSWORD` | `admin` / `admin` | Airflow login, also used by the API |
+| `BIND_ADDR` | `127.0.0.1` | Host interface the ports are published on. Druid, Kafka, HDFS and the API have no authentication, so set `0.0.0.0` only on a trusted network |
 | `APACHE_MIRROR` (build arg) | archive.apache.org | Faster Apache mirror for the image build |
 
 ## Stop, restart, reset

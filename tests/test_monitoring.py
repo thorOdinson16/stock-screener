@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "monitoring")))
 
+import collect_metrics  # noqa: E402
 from collect_metrics import parse_hdfs_report, total_kafka_lag  # noqa: E402
 
 HDFS_REPORT = """\
@@ -37,6 +38,26 @@ def test_total_kafka_lag():
         "seatunnel market.quotes 1 50 60 10 c1\n"
     )
     assert total_kafka_lag(text) == 20
+
+
+def test_druid_metrics_report_only_measured_latency():
+    calls = []
+
+    def fake_sql(query, url, timeout=15):
+        calls.append(query)
+        if "sys.segments" in query:
+            return [{"datasource": "screener", "segments": 2}]
+        return [{"t": "2026-11-09T10:00:00.000Z"}]
+
+    original = collect_metrics.druid_sql
+    collect_metrics.druid_sql = fake_sql
+    try:
+        result = collect_metrics.collect_druid({"DRUID_URL": "http://x"})
+    finally:
+        collect_metrics.druid_sql = original
+    assert "query_latency_ms" not in result  # was measured before any query ran
+    assert result["segment_query_latency_ms"] >= 0
+    assert result["segments"] == {"screener": 2}
 
 
 def _run_all():

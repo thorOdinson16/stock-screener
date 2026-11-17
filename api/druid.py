@@ -7,12 +7,14 @@ stock_scores, market_quotes).
 """
 
 import logging
+import os
 
 import requests
 
 logger = logging.getLogger(__name__)
 
-DRUID_SQL_URL = "http://localhost:8888/druid/v2/sql"
+# Same variable the pipeline scripts use (config/pipeline.env).
+DRUID_SQL_URL = os.environ.get("DRUID_URL", "http://localhost:8888").rstrip("/") + "/druid/v2/sql"
 
 # Scalar subquery selecting the most recent screener snapshot. Served snapshots
 # are append-only, so queries scope to this to get "latest per symbol".

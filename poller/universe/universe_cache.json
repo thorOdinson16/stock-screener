@@ -1,5 +1,5 @@
 {
-  "fetched_at": 1791096757.3577132,
+  "fetched_at": 1793042709.386638,
   "stocks": [
     {
       "company_name": "360 ONE WAM Ltd.",
@@ -1549,6 +1549,13 @@
       "isin": "INE090A01021"
     },
     {
+      "company_name": "ICICI Life Insurance Ltd.",
+      "industry": "Financial Services",
+      "symbol": "ICICILIFE",
+      "yf_symbol": "ICICILIFE.NS",
+      "isin": "INE726G01019"
+    },
+    {
       "company_name": "ICICI Lombard General Insurance Company Ltd.",
       "industry": "Financial Services",
       "symbol": "ICICIGI",
@@ -1561,13 +1568,6 @@
       "symbol": "ICICIAMC",
       "yf_symbol": "ICICIAMC.NS",
       "isin": "INE346A01027"
-    },
-    {
-      "company_name": "ICICI Prudential Life Insurance Company Ltd.",
-      "industry": "Financial Services",
-      "symbol": "ICICIPRULI",
-      "yf_symbol": "ICICIPRULI.NS",
-      "isin": "INE726G01019"
     },
     {
       "company_name": "IDBI Bank Ltd.",

@@ -22,6 +22,7 @@ import logging
 
 from kafka_producer import MarketDataProducer
 from market_data import fetch_quotes_batch, fetch_fundamentals_batch, to_dict
+from runchecks import fraction, positive_int, require_success_rate, DEFAULT_MAX_FAILURE_FRACTION
 from universe.universe import get_universe
 
 logging.basicConfig(
@@ -34,19 +35,29 @@ QUOTES_TOPIC = "market.quotes"
 FUNDAMENTALS_TOPIC = "market.fundamentals"
 
 
-def run_quotes_cycle(producer: MarketDataProducer, universe, batch_size: int) -> int:
+def run_quotes_cycle(producer: MarketDataProducer, universe, batch_size: int,
+                     max_failure_fraction: float = DEFAULT_MAX_FAILURE_FRACTION) -> int:
     snapshots = fetch_quotes_batch(universe, batch_size=batch_size)
     records = [to_dict(s) for s in snapshots]
+    # A quote without a price is as good as a failed fetch.
+    require_success_rate(
+        sum(r.get("close") is not None for r in records), len(universe), "Quote fetch",
+        max_failure_fraction,
+    )
     producer.publish_many(QUOTES_TOPIC, records)
     producer.flush()
+    producer.raise_on_failure()
     return len(records)
 
 
-def run_fundamentals_cycle(producer: MarketDataProducer, universe, batch_size: int) -> int:
+def run_fundamentals_cycle(producer: MarketDataProducer, universe, batch_size: int,
+                           max_failure_fraction: float = DEFAULT_MAX_FAILURE_FRACTION) -> int:
     snapshots = fetch_fundamentals_batch(universe, batch_size=batch_size)
     records = [to_dict(s) for s in snapshots]
+    require_success_rate(len(records), len(universe), "Fundamentals fetch", max_failure_fraction)
     producer.publish_many(FUNDAMENTALS_TOPIC, records)
     producer.flush()
+    producer.raise_on_failure()
     return len(records)
 
 
@@ -62,8 +73,12 @@ def main():
     parser.add_argument("--batch-size", type=int, default=50, help="Symbols per yfinance batch request")
     parser.add_argument("--bootstrap-servers", default="localhost:9092", help="Kafka bootstrap servers")
     parser.add_argument(
-        "--universe-limit", type=int, default=None,
+        "--universe-limit", type=positive_int, default=None,
         help="Limit universe to first N symbols (for testing without hitting the full 500)",
+    )
+    parser.add_argument(
+        "--max-failure-fraction", type=fraction, default=DEFAULT_MAX_FAILURE_FRACTION,
+        help="Exit non-zero when more than this fraction of symbols fail to fetch",
     )
     args = parser.parse_args()
 
@@ -75,10 +90,10 @@ def main():
 
     producer = MarketDataProducer(bootstrap_servers=args.bootstrap_servers)
 
-    n_quotes = run_quotes_cycle(producer, universe, args.batch_size)
+    n_quotes = run_quotes_cycle(producer, universe, args.batch_size, args.max_failure_fraction)
     logger.info("Published %d quote records.", n_quotes)
     if not args.quotes_only:
-        n_fund = run_fundamentals_cycle(producer, universe, args.batch_size)
+        n_fund = run_fundamentals_cycle(producer, universe, args.batch_size, args.max_failure_fraction)
         logger.info("Published %d fundamentals records.", n_fund)
     logger.info("Poll cycle complete. Exiting.")
 

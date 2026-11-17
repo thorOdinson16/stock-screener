@@ -157,7 +157,6 @@ export interface OpsSnapshot {
     segments?: Record<string, number>;
     screener_latest?: string | null;
     segment_query_latency_ms?: number;
-    query_latency_ms?: number;
     error?: string;
   };
   hdfs: {

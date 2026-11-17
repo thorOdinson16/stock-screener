@@ -5,6 +5,7 @@ import unittest
 import numpy as np
 import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _optional import requires
 from ml.evaluation.xgb_kalman import kalman_scores, fit_xgb, build_kalman, paired_check
 from ml.evaluation.tournament_models import training_rows
 
@@ -52,6 +53,7 @@ class KalmanTests(unittest.TestCase):
         self.assertEqual(set(scored.trade_date), set(days[252:270]))
 
 
+@requires("xgboost")
 class XGBTests(unittest.TestCase):
     def sample(self):
         rng = np.random.default_rng(12)
