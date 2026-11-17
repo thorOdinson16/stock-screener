@@ -6,12 +6,17 @@ import { fmtDateTime } from "../format";
 
 const STEP_LABELS: Record<string, string> = {
   preflight: "Preflight",
+  druid_resume: "Resume Druid ingestion",
   poll: "Poll market data",
   ingest: "Ingest (SeaTunnel)",
   indicators: "Compute indicators",
   score: "Score universe",
   serve: "Publish serving data",
   wait_for_druid: "Wait for Druid",
+  druid_wait: "Drain Druid ingestion",
+  druid_suspend: "Suspend Druid ingestion",
+  collect_metrics: "Collect metrics",
+  paper_tracking: "Paper trial (frozen candidate)",
   retrain: "Retrain models",
   maintenance: "Iceberg maintenance",
 };
@@ -103,11 +108,15 @@ export default function PipelineControl() {
     previousState.current = run?.state;
   }, [run?.state, queryClient]);
 
+  const parsedLimit = limit.trim() === "" ? null : Number(limit);
+  const limitInvalid = parsedLimit !== null && !(Number.isInteger(parsedLimit) && parsedLimit >= 1);
+
   const submit = () => {
+    if (limitInvalid) return;
     runPipeline.mutate(
       {
         full,
-        universe_limit: limit.trim() === "" ? null : Number(limit),
+        universe_limit: parsedLimit,
         publish_history: publishHistory,
       },
       { onSuccess: () => setOpen(false) }
@@ -122,7 +131,11 @@ export default function PipelineControl() {
         </button>
         <button
           className="btn"
-          onClick={() => retrain.mutate()}
+          onClick={() => {
+            if (window.confirm("Retrain the scoring models? A new model replaces the one used for the published rankings.")) {
+              retrain.mutate();
+            }
+          }}
           disabled={busy}
           title="Rebuild the training set and retrain the scoring models"
         >
@@ -164,7 +177,8 @@ export default function PipelineControl() {
             </div>
             <div className="field" style={{ marginTop: 12 }}>
               <label>Universe limit (blank = full NIFTY 500)</label>
-              <input value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="e.g. 50" />
+              <input value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="e.g. 50" aria-invalid={limitInvalid} />
+              {limitInvalid && <div className="run-error">Enter a whole number of 1 or more, or leave blank.</div>}
             </div>
             <label className="toggle" style={{ marginTop: 12 }}>
               <input
@@ -178,7 +192,7 @@ export default function PipelineControl() {
               <button className="btn" onClick={() => setOpen(false)}>
                 Cancel
               </button>
-              <button className="btn primary" onClick={submit} disabled={runPipeline.isPending}>
+              <button className="btn primary" onClick={submit} disabled={runPipeline.isPending || limitInvalid}>
                 {runPipeline.isPending ? "Starting…" : "Run"}
               </button>
             </div>

@@ -18,7 +18,7 @@ export default function TopPicks() {
         <div>
           <h1 className="page-title">Top Picks</h1>
           <p className="page-sub">
-            Ranked by the ML score for the selected forward-return horizon
+            Ranked by the model's relative score for the selected horizon (a ranking, not a return forecast)
             {" · "}<Link className="link" to="/trade-plan">Build a capital and risk plan</Link>
           </p>
         </div>

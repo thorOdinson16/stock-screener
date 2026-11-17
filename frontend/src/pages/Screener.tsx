@@ -36,7 +36,17 @@ const DEFAULTS: Filters = {
   order: "desc",
 };
 
-const num = (s: string): number | undefined => (s.trim() === "" ? undefined : Number(s));
+// Blank or non-numeric input means "no filter": Number("abc") is NaN, which used
+// to be sent to the API as "NaN".
+const num = (s: string): number | undefined => {
+  if (s.trim() === "") return undefined;
+  const value = Number(s);
+  return Number.isFinite(value) ? value : undefined;
+};
+
+// RFC 4180: quote every cell and double embedded quotes. JSON.stringify escapes
+// quotes with backslashes, which spreadsheets read as broken rows.
+const csvCell = (value: unknown): string => `"${String(value ?? "").replace(/"/g, '""')}"`;
 
 function toCsv(rows: StockRow[]): string {
   const cols = [
@@ -45,7 +55,7 @@ function toCsv(rows: StockRow[]): string {
   ];
   const header = cols.join(",");
   const body = rows
-    .map((r) => cols.map((c) => JSON.stringify(r[c] ?? "")).join(","))
+    .map((r) => cols.map((c) => csvCell(r[c])).join(","))
     .join("\n");
   return `${header}\n${body}`;
 }
@@ -124,8 +134,8 @@ export default function Screener() {
             </select>
           </div>
           <div className="field">
-            <label>Min score</label>
-            <input style={{ width: 100 }} value={filters.minScore} onChange={(e) => set({ minScore: e.target.value })} placeholder="e.g. 0.02" />
+            <label>Min score (relative rank)</label>
+            <input style={{ width: 100 }} value={filters.minScore} onChange={(e) => set({ minScore: e.target.value })} placeholder="e.g. 0.1" />
           </div>
           <div className="field">
             <label>P/E min</label>
